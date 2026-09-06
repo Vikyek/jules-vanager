@@ -1079,7 +1079,7 @@ class JulesTUIApp(App):
                     details = s.get("details", "")
                     repo = s.get("repo", "Vikyek/paru-wrapper")
                     filtered.append({
-                        "id": f"sug-{hash(title)}",
+                        "id": s.get("id") or f"sug-{abs(hash(title))}",
                         "title": title,
                         "prompt": details,
                         "state": "SUGGESTION",
@@ -1113,9 +1113,6 @@ class JulesTUIApp(App):
                     if self.filter_mode == "COMPLETED" and st not in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
                         continue
                     filtered.append(s)
-
-                for agy_s in getattr(self, "agy_stolen_sessions", {}).values():
-                    filtered.append(agy_s)
 
             # Priority order: Answering > Awaiting input/feedback > Running/In Progress > Failed/Errors > Others > Completed
             def state_priority(s: Dict[str, Any]) -> int:
@@ -1314,7 +1311,7 @@ class JulesTUIApp(App):
 
     @work(thread=True)
     def fetch_session_activities_worker(self, sid: str, s: Dict[str, Any], archive_time: str) -> None:
-        if s.get("is_unassigned_pr"):
+        if s.get("is_unassigned_pr") or s.get("is_suggestion") or s.get("is_agy_stolen"):
             return
         now = time.time()
         if sid in _SESSION_ACTIVITIES_CACHE and (now - _SESSION_ACTIVITIES_CACHE_TIME.get(sid, 0)) < 45:
@@ -1341,9 +1338,9 @@ class JulesTUIApp(App):
                 prompt = s.get("details") or title
                 
                 # Instantly dismiss suggestion synchronously on UI thread so it disappears immediately
-                if title:
+                if title and title.strip():
                     dismiss_suggestion(title)
-                    self.suggestions = [sug for sug in getattr(self, "suggestions", []) if sug.get("title", "").strip() != title.strip()]
+                    self.suggestions = [sug for sug in getattr(self, "suggestions", []) if (sug.get("title") or "").strip() != title.strip()]
                     self.populate_session_list()
                 
                 self.update_status(f"Starting Jules session for suggestion in {repo}...")
@@ -1458,6 +1455,19 @@ class JulesTUIApp(App):
         list_view = self.query_one("#session-list", ListView)
         if isinstance(list_view.highlighted_child, SessionItem):
             s = list_view.highlighted_child.session
+            if s.get("is_suggestion"):
+                title = s.get("title", "Suggestion Task").strip()
+                repo = s.get("repo", "paru-wrapper")
+                prompt = s.get("details") or title
+                if title:
+                    dismiss_suggestion(title)
+                    self.suggestions = [sug for sug in getattr(self, "suggestions", []) if sug.get("title", "").strip() != title]
+                    self.populate_session_list()
+                self.update_status(f"Starting Jules session for suggestion in {repo}...")
+                self.spawn_suggestion_worker(repo, prompt, title)
+                return
+            if s.get("is_agy_stolen"):
+                return
             sid = list_view.highlighted_child.sid
             prompt = s.get("prompt") or s.get("title") or "Active Task"
             act_info = _SESSION_ACTIVITIES_CACHE.get(sid, {})
@@ -1557,7 +1567,7 @@ class JulesTUIApp(App):
                 title = s.get("title", "").strip()
                 if title:
                     dismiss_suggestion(title)
-                    self.suggestions = [sug for sug in getattr(self, "suggestions", []) if sug.get("title", "").strip() != title]
+                    self.suggestions = [sug for sug in getattr(self, "suggestions", []) if (sug.get("title") or "").strip() != title]
                     self.update_status(f"Dismissed suggestion: {title[:50]}...")
                     self.populate_session_list()
                     return
@@ -1568,14 +1578,14 @@ class JulesTUIApp(App):
         if isinstance(list_view.highlighted_child, SessionItem):
             s = list_view.highlighted_child.session
             if s.get("is_suggestion"):
-                title = s.get("title", "Suggestion Task").strip()
+                title = (s.get("title") or "Suggestion Task").strip()
                 repo = s.get("repo", "paru-wrapper")
                 prompt = s.get("details") or title
                 
                 # Instantly dismiss suggestion on UI thread
                 if title:
                     dismiss_suggestion(title)
-                    self.suggestions = [sug for sug in getattr(self, "suggestions", []) if sug.get("title", "").strip() != title]
+                    self.suggestions = [sug for sug in getattr(self, "suggestions", []) if (sug.get("title") or "").strip() != title]
                     self.populate_session_list()
 
                 self.update_status(f"Stealing suggestion for AGY execution in {repo}...")
@@ -1591,38 +1601,15 @@ class JulesTUIApp(App):
             if not os.path.exists(target_dir):
                 target_dir = os.path.expanduser("~/Projects")
 
-            stolen_id = f"agy-{hash(title)}"
-            if not hasattr(self, "agy_stolen_sessions"):
-                self.agy_stolen_sessions = {}
-
-            self.agy_stolen_sessions[stolen_id] = {
-                "id": stolen_id,
-                "title": f"⚡ AGY Steal: {title}",
-                "prompt": prompt,
-                "state": "RUNNING (AGY)",
-                "is_agy_stolen": True,
-                "repo": repo,
-                "details": f"Stolen suggestion executing directly in {clean_repo} via AGY subagent.\n\nTask:\n{prompt}",
-                "source": "agy_stealer",
-                "createTime": time.strftime("%Y-%m-%dT%H:%M:%SZ")
-            }
-
             cmd = ["agy", "-p", f"Task stole from Jules suggestion: {prompt}"]
             self.call_from_thread(self.update_status, f"Launching AGY CLI worker in {clean_repo}...")
-            self.call_from_thread(self.populate_session_list)
-
             res = subprocess.run(cmd, cwd=target_dir, capture_output=True, text=True, timeout=120)
             
             if res.returncode == 0:
-                if stolen_id in self.agy_stolen_sessions:
-                    self.agy_stolen_sessions[stolen_id]["state"] = "COMPLETED (AGY)"
                 self.call_from_thread(self.update_status, f"AGY successfully executed suggestion: {title[:40]}...")
             else:
                 err_text = res.stderr.strip()[:100] or res.stdout.strip()[:100] or "Unknown exit code"
-                if stolen_id in self.agy_stolen_sessions:
-                    self.agy_stolen_sessions[stolen_id]["state"] = f"FAILED (AGY): {err_text[:30]}"
                 self.call_from_thread(self.update_status, f"AGY worker exited with error: {err_text}")
-            self.call_from_thread(self.populate_session_list)
         except Exception as e:
             self.call_from_thread(self.update_status, f"Error in AGY worker: {e}")
 

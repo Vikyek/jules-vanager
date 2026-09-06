@@ -463,6 +463,19 @@ class JulesTUIApp(App):
                     continue
                 filtered.append(s)
 
+            # Priority order: Awaiting input/feedback > Running/In Progress > Others
+            def state_priority(s: Dict[str, Any]) -> int:
+                st = (s.get("state") or "").upper()
+                if "AWAITING" in st or "PAUSED" in st:
+                    return 0
+                if "IN_PROGRESS" in st or "RUNNING" in st:
+                    return 1
+                if st in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
+                    return 3
+                return 2
+
+            filtered.sort(key=state_priority)
+
             if not filtered:
                 list_view.mount(ListItem(Label("No sessions found for current filter mode.", classes="state-neutral")))
                 return

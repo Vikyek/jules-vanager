@@ -921,22 +921,15 @@ class JulesTUIApp(App):
 
 
 def main() -> None:
-    # Auto-kill prior jules_tui instances and their Kitty parent windows on startup
+    # Safely kill only prior jules_tui python processes (never touch parent shells/WM)
     current_pid = os.getpid()
     try:
-        out = subprocess.check_output(["pgrep", "-f", "jules_tui.py"], text=True)
+        out = subprocess.check_output(["pgrep", "-f", "python3.*jules_tui.py"], text=True)
         for line in out.strip().splitlines():
             try:
                 pid = int(line.strip())
                 if pid != current_pid:
-                    try:
-                        ppid_out = subprocess.check_output(["ps", "-o", "ppid=", "-p", str(pid)], text=True).strip()
-                        ppid = int(ppid_out)
-                        if ppid > 1 and ppid != current_pid:
-                            os.kill(ppid, signal.SIGKILL)
-                    except Exception:
-                        pass
-                    os.kill(pid, signal.SIGKILL)
+                    os.kill(pid, signal.SIGTERM)
             except Exception:
                 pass
     except Exception:

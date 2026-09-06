@@ -406,7 +406,18 @@ class ConfirmModalScreen(ModalScreen[bool]):
 
 
 class CustomFooter(Footer):
+    show_archived = reactive(False)
+
     def watch_show_archived(self, value: bool) -> None:
+        try:
+            target_desc = "Unarchive" if value else "Archive"
+            for screen in [self.screen, self.app]:
+                if hasattr(screen, "_bindings") and hasattr(screen._bindings, "bindings"):
+                    for binding in screen._bindings.bindings.values():
+                        if getattr(binding, "key", "") == "a":
+                            binding.description = target_desc
+        except Exception:
+            pass
         self.call_after_refresh(self.recompose)
 
 
@@ -551,7 +562,7 @@ class JulesTUIApp(App):
             with ScrollableContainer(id="right-pane"):
                 yield Label("Select a session from the list", id="detail-header")
                 yield Markdown("No session selected.", id="detail-content")
-        yield Footer()
+        yield CustomFooter().data_bind(JulesTUIApp.show_archived)
 
     def on_mount(self) -> None:
         self.populate_session_list()

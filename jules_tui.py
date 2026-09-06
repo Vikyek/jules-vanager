@@ -237,25 +237,18 @@ class SessionItem(ListItem):
         from rich.text import Text
         txt = Text()
 
-        state_bg = "#eab308"
-        if state in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
-            badge_style = "bold #22c55e"
-            state_bg = "#15803d"
-        elif "FAIL" in state or "CONFLICT" in state or "REJECTED" in state:
-            badge_style = "bold #ef4444"
-            state_bg = "#b91c1c"
-        elif "AWAITING" in state or "IN_PROGRESS" in state or "RUNNING" in state:
-            badge_style = "bold #f59e0b"
-            state_bg = "#854d0e"
-        else:
-            badge_style = "#71717a"
-            state_bg = "#3f3f46"
-
         if is_focused:
-            self.styles.background = state_bg
-            txt.append(f"[{state}] {title}", style=f"bold #ffffff on {state_bg}")
+            txt.append(f"[{state}] {title}", style="bold #000000 on #eab308")
         else:
-            self.styles.background = "#0a0a0a"
+            if state in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
+                badge_style = "bold #22c55e"
+            elif "FAIL" in state or "CONFLICT" in state or "REJECTED" in state:
+                badge_style = "bold #ef4444"
+            elif "AWAITING" in state or "IN_PROGRESS" in state or "RUNNING" in state:
+                badge_style = "bold #f59e0b"
+            else:
+                badge_style = "#71717a"
+
             txt.append(f"[{state}]", style=badge_style)
             txt.append(f" {title}", style="#eab308")
 
@@ -412,6 +405,7 @@ class JulesTUIApp(App):
     BINDINGS = [
         Binding("r", "refresh_sessions", "Refresh", show=True),
         Binding("a", "archive_selected", "Archive", show=True),
+        Binding("v", "toggle_archived", "Archived View", show=True),
         Binding("m", "cycle_filter", "Filter Mode", show=True),
         Binding("enter", "inspect_reply", "Reply / Inspect", show=True),
         Binding("s", "toggle_service", "Toggle Service", show=True),
@@ -462,6 +456,7 @@ class JulesTUIApp(App):
     ListView {
         height: 100%;
         background: #0a0a0a;
+        border: none;
     }
 
     ListItem {
@@ -469,7 +464,7 @@ class JulesTUIApp(App):
         height: auto;
         color: #eab308;
         background: #0a0a0a;
-        border-bottom: dashed #334155;
+        border-bottom: none;
     }
 
     #item-static {
@@ -479,14 +474,11 @@ class JulesTUIApp(App):
     ListItem:focus, ListItem.--highlight {
         background: #eab308;
         color: #000000;
-        border-bottom: none;
     }
 
-    ListItem:focus #item-badge, ListItem.--highlight #item-badge,
-    ListItem:focus #item-title, ListItem.--highlight #item-title {
-        color: #000000;
+    ListItem:focus Static, ListItem.--highlight Static {
         background: #eab308;
-        text-style: bold;
+        color: #000000;
     }
 
     .state-success {
@@ -523,7 +515,8 @@ class JulesTUIApp(App):
     def __init__(self) -> None:
         super().__init__()
         self.sessions: List[Dict[str, Any]] = load_cached_sessions()
-        self.filter_mode: str = "ALL"  # ALL, ACTIVE, AWAITING, COMPLETED
+        self.filter_mode: str = "ALL"  # ALL, ACTIVE, AWAITING, COMPLETED, ARCHIVED
+        self.show_archived: bool = False
         self.status_msg: str = "Ready"
         self.spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
         self.spinner_idx = 0
@@ -557,7 +550,8 @@ class JulesTUIApp(App):
             else:
                 spinner = "●" if service_active else "○"
 
-            bar.update(f" {spinner} Mode: [{self.filter_mode}] | {self.status_msg}")
+            view_type = "ARCHIVED PANEL" if self.show_archived else f"Filter: [{self.filter_mode}]"
+            bar.update(f" {spinner} View: {view_type} | {self.status_msg}")
         except Exception:
             pass
 
@@ -572,13 +566,21 @@ class JulesTUIApp(App):
             filtered = []
             for s in self.sessions:
                 st = s.get("state", "").upper()
-                if self.filter_mode == "ACTIVE" and st not in ("IN_PROGRESS", "RUNNING", "AWAITING_INPUT"):
-                    continue
-                if self.filter_mode == "AWAITING" and "AWAITING" not in st:
-                    continue
-                if self.filter_mode == "COMPLETED" and st not in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
-                    continue
-                filtered.append(s)
+                is_archived = st in ("ARCHIVED", "CLOSED") or s.get("archived", False)
+                
+                if self.show_archived:
+                    if is_archived:
+                        filtered.append(s)
+                else:
+                    if is_archived:
+                        continue
+                    if self.filter_mode == "ACTIVE" and st not in ("IN_PROGRESS", "RUNNING", "AWAITING_INPUT"):
+                        continue
+                    if self.filter_mode == "AWAITING" and "AWAITING" not in st:
+                        continue
+                    if self.filter_mode == "COMPLETED" and st not in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
+                        continue
+                    filtered.append(s)
 
             # Priority order: Awaiting input/feedback > Running/In Progress > Others
             def state_priority(s: Dict[str, Any]) -> int:
@@ -594,7 +596,8 @@ class JulesTUIApp(App):
             filtered.sort(key=state_priority)
 
             if not filtered:
-                list_view.mount(ListItem(Label("No sessions found for current filter mode.", classes="state-neutral")))
+                msg = "No archived sessions found." if self.show_archived else "No sessions found for current filter mode."
+                list_view.mount(ListItem(Label(msg, classes="state-neutral")))
                 return
 
             for s in filtered:
@@ -606,18 +609,17 @@ class JulesTUIApp(App):
     def fetch_data_worker(self) -> None:
         """Background worker thread fetching sessions without UI blocking."""
         try:
-            res = list_sessions(include_archived=False)
+            res = list_sessions(include_archived=True)
             raw_sessions = res.get("sessions", []) if isinstance(res, dict) else []
-            new_sessions = [s for s in raw_sessions if s.get("state") not in ("ARCHIVED", "CLOSED")]
             
-            unassigned = get_unassigned_jules_prs(new_sessions)
-            new_sessions.extend(unassigned)
+            unassigned = get_unassigned_jules_prs(raw_sessions)
+            raw_sessions.extend(unassigned)
             
-            if new_sessions:
-                save_cached_sessions(new_sessions)
-                self.sessions = new_sessions
+            if raw_sessions:
+                save_cached_sessions(raw_sessions)
+                self.sessions = raw_sessions
                 self.call_from_thread(self.populate_session_list)
-                self.call_from_thread(self.update_status, f"Fetched {len(new_sessions)} sessions.")
+                self.call_from_thread(self.update_status, f"Fetched {len(raw_sessions)} total sessions.")
         except Exception as e:
             self.call_from_thread(self.update_status, f"Fetch error: {e}")
 
@@ -652,10 +654,18 @@ class JulesTUIApp(App):
         self.fetch_data_worker()
 
     def action_cycle_filter(self) -> None:
+        if self.show_archived:
+            self.show_archived = False
         modes = ["ALL", "ACTIVE", "AWAITING", "COMPLETED"]
         idx = (modes.index(self.filter_mode) + 1) % len(modes)
         self.filter_mode = modes[idx]
         self.update_status(f"Filter mode set to {self.filter_mode}")
+        self.populate_session_list()
+
+    def action_toggle_archived(self) -> None:
+        self.show_archived = not self.show_archived
+        view_str = "Archived Sessions" if self.show_archived else f"Active Sessions ({self.filter_mode})"
+        self.update_status(f"Switched view to {view_str}")
         self.populate_session_list()
 
     def action_inspect_reply(self) -> None:

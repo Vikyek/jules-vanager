@@ -434,11 +434,13 @@ class JulesTUIApp(App):
         color: #eab308;
     }
 
-    Header {
+    #top-header {
         dock: top;
         height: 1;
         background: #eab308;
         color: #000000;
+        text-align: center;
+        text-style: bold;
     }
 
     Footer {
@@ -542,7 +544,7 @@ class JulesTUIApp(App):
         self.title_pulse = False
 
     def compose(self) -> ComposeResult:
-        yield Header(show_clock=True)
+        yield Static(" 󱚝 GOOGLE JULES API VANAGER & LISTENER TUI ", id="top-header")
         yield Static("Initializing Jules TUI...", id="status-bar")
         with Horizontal():
             with Container(id="left-pane"):

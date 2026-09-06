@@ -56,14 +56,21 @@ class TestJulesTUIApp(unittest.IsolatedAsyncioTestCase):
     async def test_modal_screen_rendering(self):
         app = JulesTUIApp()
         async with app.run_test() as pilot:
-            # Push modal screen non-interactively
-            modal = ReplyModalScreen("test-session-123", "Fix auth middleware bug")
+            # Push modal screen non-interactively with long question
+            long_question = "Question line\n" * 30
+            modal = ReplyModalScreen("test-session-123", "Fix auth middleware bug", question=long_question)
             app.push_screen(modal)
             await pilot.pause()
 
             # Verify modal components mounted
             self.assertTrue(isinstance(app.screen, ReplyModalScreen))
             self.assertEqual(modal.session_id, "test-session-123")
+
+            # Test scrolling actions
+            modal.action_scroll_down()
+            await pilot.pause()
+            modal.action_scroll_up()
+            await pilot.pause()
 
             # Pop screen to dismiss modal
             app.pop_screen()

@@ -17,7 +17,7 @@ from typing import List, Dict, Any, Optional, Tuple
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
+from textual.containers import Container, Horizontal, Vertical, ScrollableContainer, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Header, Footer, Static, ListView, ListItem, Label, Input, Button, Markdown
 from textual.worker import Worker, WorkerState
@@ -413,6 +413,10 @@ class ReplyModalScreen(ModalScreen[Optional[str]]):
     """Modal screen for sending prompt responses to an active session."""
     BINDINGS = [
         Binding("escape", "dismiss_modal", "Cancel", show=True),
+        Binding("pageup", "scroll_up", "Scroll Up", show=False),
+        Binding("pagedown", "scroll_down", "Scroll Down", show=False),
+        Binding("shift+up", "scroll_up", "Scroll Up", show=False),
+        Binding("shift+down", "scroll_down", "Scroll Down", show=False),
     ]
 
     DEFAULT_CSS = """
@@ -458,13 +462,21 @@ class ReplyModalScreen(ModalScreen[Optional[str]]):
         background: transparent !important;
     }
 
+    #dialog-scroll {
+        height: auto;
+        max-height: 16;
+        min-height: 3;
+        overflow-y: auto;
+        margin-bottom: 1;
+        border: solid #3f3f46;
+        padding: 0 1;
+        background: transparent !important;
+    }
+
     #dialog-prompt {
         color: #facc15;
-        margin-bottom: 1;
-        height: auto;
-        max-height: 12;
-        overflow-y: auto;
         background: transparent !important;
+        width: 100%;
     }
 
     Input, Input:focus, Input.--cursor {
@@ -495,10 +507,12 @@ class ReplyModalScreen(ModalScreen[Optional[str]]):
         with Container(id="dialog"):
             if self.question:
                 yield Label(f"❓ Jules' Question [{self.session_id}]", id="dialog-title")
-                yield Static(f"Feedback Request:\n{self.question}", id="dialog-prompt")
+                with VerticalScroll(id="dialog-scroll"):
+                    yield Static(f"Feedback Request:\n\n{self.question}", id="dialog-prompt")
             else:
                 yield Label(f"🤖 Reply to Session [{self.session_id}]", id="dialog-title")
-                yield Static(f"Prompt:\n{self.prompt_text}", id="dialog-prompt")
+                with VerticalScroll(id="dialog-scroll"):
+                    yield Static(f"Prompt:\n\n{self.prompt_text}", id="dialog-prompt")
             yield Input(placeholder="Type message reply (or press Enter to Submit)...", id="reply-input")
             with Horizontal(id="buttons"):
                 yield Button("Cancel [Esc]", variant="error", id="cancel")
@@ -506,6 +520,21 @@ class ReplyModalScreen(ModalScreen[Optional[str]]):
 
     def on_mount(self) -> None:
         self.query_one(Input).focus()
+
+    def action_dismiss_modal(self) -> None:
+        self.dismiss(None)
+
+    def action_scroll_up(self) -> None:
+        try:
+            self.query_one("#dialog-scroll", VerticalScroll).scroll_relative(y=-3)
+        except Exception:
+            pass
+
+    def action_scroll_down(self) -> None:
+        try:
+            self.query_one("#dialog-scroll", VerticalScroll).scroll_relative(y=3)
+        except Exception:
+            pass
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "submit":
@@ -621,6 +650,10 @@ class JulesTUIApp(App):
         Binding("b", "toggle_autostart", "Toggle Autostart", show=True),
         Binding("w", "open_web_ui", "Web UI", show=True),
         Binding("p", "open_pr", "Open PR", show=True),
+        Binding("pageup", "scroll_detail_up", "Scroll Detail Up", show=False),
+        Binding("pagedown", "scroll_detail_down", "Scroll Detail Down", show=False),
+        Binding("shift+up", "scroll_detail_up", "Scroll Detail Up", show=False),
+        Binding("shift+down", "scroll_detail_down", "Scroll Detail Down", show=False),
         Binding("q", "quit", "Quit", show=True),
     ]
 
@@ -1082,6 +1115,18 @@ class JulesTUIApp(App):
     def action_refresh_sessions(self) -> None:
         self.update_status("Refreshing sessions...")
         self.fetch_data_worker()
+
+    def action_scroll_detail_up(self) -> None:
+        try:
+            self.query_one("#right-pane", ScrollableContainer).scroll_relative(y=-4)
+        except Exception:
+            pass
+
+    def action_scroll_detail_down(self) -> None:
+        try:
+            self.query_one("#right-pane", ScrollableContainer).scroll_relative(y=4)
+        except Exception:
+            pass
 
     def check_action_archive_selected(self) -> Tuple[bool, str]:
         """Dynamically supply action state and label to Textual Footer."""

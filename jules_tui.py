@@ -937,6 +937,11 @@ class JulesTUIApp(App):
         self.populate_session_list()
         self.fetch_data_worker()
         self.set_interval(0.1, self.animate_status_bar)
+        self.set_interval(30, self.auto_refresh_sessions)
+
+    def auto_refresh_sessions(self) -> None:
+        """Periodic background refresh of sessions list."""
+        self.fetch_data_worker()
 
     def animate_status_bar(self) -> None:
         try:
@@ -986,6 +991,12 @@ class JulesTUIApp(App):
     def populate_session_list(self) -> None:
         try:
             list_view = self.query_one("#session-list", ListView)
+
+            # Preserve current selection across repopulation
+            prev_sid = None
+            if isinstance(list_view.highlighted_child, SessionItem):
+                prev_sid = list_view.highlighted_child.sid
+
             list_view.clear()
 
             filtered = []
@@ -1036,8 +1047,16 @@ class JulesTUIApp(App):
                 list_view.mount(ListItem(Label(msg, classes="state-neutral")))
                 return
 
-            for s in filtered:
+            restore_idx = 0
+            for i, s in enumerate(filtered):
                 list_view.mount(SessionItem(s))
+                if prev_sid:
+                    item_sid = s.get("id") or s.get("name", "").split("/")[-1]
+                    if item_sid == prev_sid:
+                        restore_idx = i
+
+            if prev_sid and restore_idx < len(filtered):
+                list_view.index = restore_idx
         except Exception:
             pass
 

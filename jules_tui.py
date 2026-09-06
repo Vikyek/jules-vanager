@@ -482,7 +482,7 @@ class JulesTUIApp(App):
         background: #eab308 !important;
         color: #000000 !important;
         text-style: bold;
-        border-bottom: dashed #000000;
+        border-bottom: dashed #eab308;
     }
 
     ListItem:focus .session-item-label, ListItem.--highlight .session-item-label, ListItem.--highlight-active .session-item-label {

@@ -275,12 +275,12 @@ class ReplyModalScreen(ModalScreen[Optional[str]]):
     DEFAULT_CSS = """
     ReplyModalScreen {
         align: center middle;
-        background: rgba(0, 0, 0, 0.7);
+        background: transparent;
     }
 
     #dialog {
         padding: 1 2;
-        background: $surface;
+        background: transparent;
         border: thick $primary;
         width: 70;
         height: 18;
@@ -290,6 +290,7 @@ class ReplyModalScreen(ModalScreen[Optional[str]]):
         text-style: bold;
         color: $accent;
         margin-bottom: 1;
+        background: transparent;
     }
 
     #dialog-prompt {
@@ -297,19 +298,23 @@ class ReplyModalScreen(ModalScreen[Optional[str]]):
         margin-bottom: 1;
         height: 4;
         overflow-y: auto;
+        background: transparent;
     }
 
     Input {
         margin: 1 0;
+        background: transparent;
     }
 
     #buttons {
         height: 3;
         align: right middle;
+        background: transparent;
     }
 
     Button {
         margin-left: 1;
+        background: transparent;
     }
     """
 
@@ -350,12 +355,12 @@ class ConfirmModalScreen(ModalScreen[bool]):
     DEFAULT_CSS = """
     ConfirmModalScreen {
         align: center middle;
-        background: rgba(0, 0, 0, 0.7);
+        background: transparent;
     }
 
     #confirm-dialog {
         padding: 1 2;
-        background: $surface;
+        background: transparent;
         border: thick $warning;
         width: 60;
         height: 12;
@@ -365,20 +370,24 @@ class ConfirmModalScreen(ModalScreen[bool]):
         text-style: bold;
         color: $warning;
         margin-bottom: 1;
+        background: transparent;
     }
 
     #confirm-prompt {
         color: $text;
         margin-bottom: 1;
+        background: transparent;
     }
 
     #confirm-buttons {
         height: 3;
         align: right middle;
+        background: transparent;
     }
 
     Button {
         margin-left: 1;
+        background: transparent;
     }
     """
 
@@ -410,8 +419,6 @@ class JulesTUIApp(App):
     TITLE = "Jules Vanager TUI"
     SUB_TITLE = "Google Jules API & Listener Management"
     
-    theme = "ansi-dark"
-    
     BINDINGS = [
         Binding("r", "refresh_sessions", "Refresh", show=True),
         Binding("a", "archive_selected", "Archive", show=True),
@@ -431,16 +438,22 @@ class JulesTUIApp(App):
         return True, label
 
     CSS = """
-    $surface: #000000;
-    $background: #000000;
-    $panel: #000000;
+    $surface: transparent;
+    $surface-lighten-1: transparent;
+    $surface-lighten-2: transparent;
+    $surface-darken-1: transparent;
+    $background: transparent;
+    $panel: transparent;
+    $panel-lighten-1: transparent;
+    $panel-darken-1: transparent;
+    $boost: transparent;
 
     * {
-        background: #000000 !important;
+        background: transparent !important;
     }
 
     Screen, ModalScreen, App {
-        background: #000000 !important;
+        background: transparent !important;
         color: #eab308;
     }
 
@@ -448,7 +461,7 @@ class JulesTUIApp(App):
         dock: top;
         height: auto;
         width: 100%;
-        background: #000000 !important;
+        background: transparent !important;
     }
 
     #top-header {
@@ -463,19 +476,19 @@ class JulesTUIApp(App):
     Footer {
         dock: bottom;
         height: 1;
-        background: #000000 !important;
+        background: transparent !important;
         color: #eab308;
     }
 
     FooterKey, FooterLabel, FooterKey .footer-key--key, FooterKey .footer-key--description {
-        background: #000000 !important;
+        background: transparent !important;
     }
 
     #status-bar {
         height: auto;
         min-height: 1;
         width: 100%;
-        background: #000000 !important;
+        background: transparent !important;
         color: #facc15;
         text-style: bold;
         text-align: center;
@@ -486,36 +499,45 @@ class JulesTUIApp(App):
         width: 45%;
         border-right: solid #eab308;
         height: 100%;
-        background: #000000 !important;
+        background: transparent !important;
     }
 
     #right-pane {
         width: 55%;
         height: 100%;
         padding: 1 2;
-        background: #000000 !important;
+        background: transparent !important;
         color: #06b6d4;
     }
 
     Container, ScrollableContainer, ListView, ListItem, Static, Markdown, MarkdownBlock, MarkdownHeader, MarkdownParagraph, MarkdownUnorderedList, MarkdownOrderedList, MarkdownListItem, MarkdownFence, MarkdownCodeBlock, MarkdownTable, MarkdownTableCell, MarkdownTableTitle, Label, Input, Button {
-        background: #000000 !important;
+        background: transparent !important;
+    }
+
+    Input, Input:focus, Input.--cursor {
+        background: transparent !important;
+        border: tall #eab308;
+    }
+
+    Button, Button:focus, Button:hover {
+        background: transparent !important;
     }
 
     ListView, ListView:focus, ListView > ListItem, ListView > ListItem:enabled, ListView > ListItem:hover {
-        background: #000000 !important;
+        background: transparent !important;
     }
 
     ListItem, ListItem:enabled, ListItem:hover {
         padding: 0 1;
         height: auto;
         color: #eab308;
-        background: #000000 !important;
+        background: transparent !important;
         border-bottom: none;
     }
 
     #item-static {
         width: 100%;
-        background: #000000 !important;
+        background: transparent !important;
     }
 
     ListItem:focus, ListItem.--highlight, ListView > ListItem:focus, ListView > ListItem.--highlight {
@@ -529,6 +551,10 @@ class JulesTUIApp(App):
     }
 
     Markdown, MarkdownBlock, MarkdownHeader, MarkdownParagraph, MarkdownUnorderedList, MarkdownOrderedList, MarkdownListItem, MarkdownFence, MarkdownCodeBlock, MarkdownTable, MarkdownTableCell, MarkdownTableTitle {
+        background: transparent !important;
+    }
+
+    ScrollBar {
         background: transparent !important;
     }
 

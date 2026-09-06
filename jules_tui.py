@@ -572,14 +572,21 @@ class JulesTUIApp(App):
             is_active_op = any(kw in self.status_msg.lower() for kw in ("fetching", "refreshing", "sending", "archiving", "syncing"))
             service_active = is_listener_service_active()
             
-            if is_active_op or service_active:
+            if is_active_op:
                 spinner = self.spinner_frames[self.spinner_idx % len(self.spinner_frames)]
                 self.spinner_idx += 1
+                listener_str = f"⚡ Listener: RUNNING {spinner}"
+            elif service_active:
+                listener_str = "● Listener: ACTIVE (systemd)"
             else:
-                spinner = "●" if service_active else "○"
+                listener_str = "○ Listener: STOPPED"
 
-            view_type = "ARCHIVED PANEL" if self.show_archived else f"Filter: [{self.filter_mode}]"
-            bar.update(f" {spinner} View: {view_type} | {self.status_msg}")
+            if self.show_archived:
+                panel_str = "📂 VIEW: ARCHIVED SESSIONS PANEL"
+            else:
+                panel_str = f"📋 VIEW: ACTIVE SESSIONS ({self.filter_mode})"
+
+            bar.update(f" {panel_str} | {listener_str} | {self.status_msg}")
         except Exception:
             pass
 

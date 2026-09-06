@@ -1273,6 +1273,13 @@ class JulesTUIApp(App):
                 title = s.get("title", "Suggestion Task")
                 repo = s.get("repo", "paru-wrapper")
                 prompt = s.get("details") or title
+                
+                # Instantly dismiss suggestion synchronously on UI thread so it disappears immediately
+                if title:
+                    dismiss_suggestion(title)
+                    self.suggestions = [sug for sug in getattr(self, "suggestions", []) if sug.get("title", "").strip() != title.strip()]
+                    self.populate_session_list()
+                
                 self.update_status(f"Starting Jules session for suggestion in {repo}...")
                 self.spawn_suggestion_worker(repo, prompt, title)
             elif s.get("is_unassigned_pr") and s.get("url"):
@@ -1291,11 +1298,8 @@ class JulesTUIApp(App):
                 self.call_from_thread(self.update_status, f"Error starting session: {res.get('error')}")
             else:
                 sid = res.get("id") or res.get("name", "").split("/")[-1]
-                if title:
-                    dismiss_suggestion(title)
-                    self.suggestions = [s for s in getattr(self, "suggestions", []) if s.get("title", "").strip() != title.strip()]
                 self.call_from_thread(self.update_status, f"Spawned session {sid}! Suggestion executed & dismissed.")
-                time.sleep(1.5)
+                time.sleep(1.0)
                 self.fetch_data_worker()
         except Exception as e:
             self.call_from_thread(self.update_status, f"Error spawning suggestion session: {e}")

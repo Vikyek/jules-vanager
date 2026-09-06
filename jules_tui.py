@@ -244,8 +244,10 @@ class SessionItem(ListItem):
         txt = Text()
 
         if is_focused:
-            txt.append(f"[{state}] {title}", style="bold #000000 on #eab308")
+            self.add_class("--highlight-active")
+            txt.append(f"[{state}] {title}", style="bold #000000")
         else:
+            self.remove_class("--highlight-active")
             if state in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
                 badge_style = "bold #22c55e"
             elif "FAIL" in state or "CONFLICT" in state or "REJECTED" in state:
@@ -476,16 +478,16 @@ class JulesTUIApp(App):
         color: #eab308;
     }
 
-    ListItem:focus, ListItem.--highlight {
-        background: #eab308;
-        color: #000000;
+    ListItem:focus, ListItem.--highlight, ListItem.--highlight-active {
+        background: #eab308 !important;
+        color: #000000 !important;
         text-style: bold;
         border-bottom: none;
     }
 
-    ListItem:focus .session-item-label, ListItem.--highlight .session-item-label {
-        background: #eab308;
-        color: #000000;
+    ListItem:focus .session-item-label, ListItem.--highlight .session-item-label, ListItem.--highlight-active .session-item-label {
+        background: #eab308 !important;
+        color: #000000 !important;
         text-style: bold;
     }
 

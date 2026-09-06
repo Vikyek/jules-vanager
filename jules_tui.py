@@ -210,16 +210,21 @@ class SessionItem(ListItem):
         if len(title) > 60:
             title = title[:57] + "..."
 
-        if state in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
-            color = "green"
-        elif "FAIL" in state or "CONFLICT" in state or "REJECTED" in state:
-            color = "red"
-        elif "AWAITING" in state or "IN_PROGRESS" in state or "RUNNING" in state:
-            color = "yellow"
-        else:
-            color = "bright_black"
+        from rich.text import Text
 
-        yield Label(f"[{color} bold][{state}][/{color} bold] {title}", classes="item-title")
+        if state in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
+            color = "bold green"
+        elif "FAIL" in state or "CONFLICT" in state or "REJECTED" in state:
+            color = "bold red"
+        elif "AWAITING" in state or "IN_PROGRESS" in state or "RUNNING" in state:
+            color = "bold yellow"
+        else:
+            color = "dim white"
+
+        txt = Text()
+        txt.append(f"[{state}]", style=color)
+        txt.append(f" {title}")
+        yield Static(txt, classes="item-title")
 
 
 class ReplyModalScreen(ModalScreen[Optional[str]]):

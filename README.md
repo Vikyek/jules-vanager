@@ -22,7 +22,12 @@ Standalone Google Jules API Manager, Listener Daemon, Reactive Textual TUI, and 
 - **[jules-awesome-list](https://github.com/google-labs-code/jules-awesome-list)**: Curated prompt templates, strategies, and best practices for Jules AI tasks.
 - **[stitch-skills](https://github.com/google-labs-code/stitch-skills)**: Agent skills enabling AI agents to design, build, and iterate UI screens via Stitch MCP tools.
 - **[stitch-sdk](https://github.com/google-labs-code/stitch-sdk)**: Programmatic UI screen generation, HTML extraction, and visual screenshot rendering.
+- **[stitch-loop](https://github.com/google-labs-code/stitch-loop)**: Iterative design-to-code feedback loop system for real-time UI/UX visual validation.
 - **[design.md](https://github.com/google-labs-code/design.md)**: Open-source specification combining YAML design tokens with Markdown rationale for AI design systems.
+- **[react-components](https://github.com/google-labs-code/react-components)**: Tools and converters for translating Stitch AI UI designs directly to React components.
+- **[shadcn-ui](https://github.com/google-labs-code/shadcn-ui)**: Integration helpers for building accessible component libraries with Tailwind and Radix UI.
+- **[enhance-prompt](https://github.com/google-labs-code/enhance-prompt)**: Prompt optimization library transforming simple requests into detailed UI/UX agent instructions.
+- **[remotion](https://github.com/google-labs-code/remotion)**: Video generation tools creating animated walkthrough videos from Stitch application designs.
 
 ---
 

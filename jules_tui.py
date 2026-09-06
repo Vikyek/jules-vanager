@@ -682,8 +682,12 @@ class JulesTUIApp(App):
                         if getattr(binding, "key", "") == "a":
                             binding.description = target_desc
 
-            footer = self.query_one(Footer)
-            footer.recompose()
+            # Safely update FooterKey widgets without calling recompose()
+            from textual.widgets._footer import FooterKey
+            for fk in self.query(FooterKey):
+                if fk.binding and fk.binding.key == "a":
+                    fk.binding.description = target_desc
+                    fk.refresh()
         except Exception:
             pass
 

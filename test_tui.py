@@ -32,6 +32,26 @@ class TestJulesTUIApp(unittest.IsolatedAsyncioTestCase):
             await pilot.press("m")
             self.assertEqual(app.filter_mode, "ALL")
 
+    async def test_archive_toggle_footer_binding(self):
+        app = JulesTUIApp()
+        async with app.run_test() as pilot:
+            self.assertFalse(app.show_archived)
+            # Press 'v' to toggle archived view
+            await pilot.press("v")
+            self.assertTrue(app.show_archived)
+
+            # Verify binding description updated to Unarchive
+            for b in app.BINDINGS:
+                if b.key == "a":
+                    self.assertEqual(b.description, "Unarchive")
+
+            # Press 'v' to toggle back
+            await pilot.press("v")
+            self.assertFalse(app.show_archived)
+            for b in app.BINDINGS:
+                if b.key == "a":
+                    self.assertEqual(b.description, "Archive")
+
     async def test_modal_screen_rendering(self):
         app = JulesTUIApp()
         async with app.run_test() as pilot:

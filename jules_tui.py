@@ -20,6 +20,7 @@ from textual.containers import Container, Horizontal, Vertical, ScrollableContai
 from textual.screen import ModalScreen
 from textual.widgets import Header, Footer, Static, ListView, ListItem, Label, Input, Button, Markdown
 from textual.worker import Worker, WorkerState
+from textual.reactive import reactive
 from textual import work
 
 # Import API manager functions
@@ -404,10 +405,17 @@ class ConfirmModalScreen(ModalScreen[bool]):
         self.dismiss(False)
 
 
+class CustomFooter(Footer):
+    def watch_show_archived(self, value: bool) -> None:
+        self.call_after_refresh(self.recompose)
+
+
 class JulesTUIApp(App):
     """Main Textual application for Google Jules API session management."""
     TITLE = "Jules Vanager TUI"
     SUB_TITLE = "Google Jules API & Listener Management"
+    
+    show_archived: bool = reactive(False)
     
     BINDINGS = [
         Binding("r", "refresh_sessions", "Refresh", show=True),
@@ -421,6 +429,11 @@ class JulesTUIApp(App):
         Binding("p", "open_pr", "Open PR", show=True),
         Binding("q", "quit", "Quit", show=True),
     ]
+
+    def check_action_archive_selected(self) -> Tuple[bool, str]:
+        """Dynamically supply action state and label to Textual Footer."""
+        label = "Unarchive" if self.show_archived else "Archive"
+        return True, label
 
     CSS = """
     Screen {
@@ -672,13 +685,17 @@ class JulesTUIApp(App):
     def update_footer_bindings(self) -> None:
         try:
             target_desc = "Unarchive" if self.show_archived else "Archive"
+            new_bindings = []
             for b in self.BINDINGS:
-                if getattr(b, "key", "") == "a":
-                    b.description = target_desc
+                if isinstance(b, Binding) and b.key == "a":
+                    new_bindings.append(Binding("a", b.action, target_desc, show=b.show, key_display=b.key_display))
+                else:
+                    new_bindings.append(b)
+            self.BINDINGS = new_bindings
 
             for screen in [self.screen, self]:
                 if hasattr(screen, "_bindings") and hasattr(screen._bindings, "bindings"):
-                    for binding in screen._bindings.bindings.values():
+                    for k, binding in list(screen._bindings.bindings.items()):
                         if getattr(binding, "key", "") == "a":
                             binding.description = target_desc
 

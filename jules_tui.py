@@ -212,25 +212,44 @@ class SessionItem(ListItem):
         self.sid = session.get("id") or session.get("name", "").split("/")[-1]
 
     def compose(self) -> ComposeResult:
+        yield Static("", id="item-static", classes="session-item-label")
+
+    def on_mount(self) -> None:
+        self.update_rendering()
+
+    def watch_has_focus(self, value: bool) -> None:
+        self.update_rendering()
+
+    def update_rendering(self) -> None:
         state = self.session.get("state", "UNKNOWN")
         title = self.session.get("title") or self.session.get("prompt") or f"Session {self.sid}"
         if len(title) > 60:
             title = title[:57] + "..."
 
-        if state in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
-            badge_style = "bold #22c55e"
-        elif "FAIL" in state or "CONFLICT" in state or "REJECTED" in state:
-            badge_style = "bold #ef4444"
-        elif "AWAITING" in state or "IN_PROGRESS" in state or "RUNNING" in state:
-            badge_style = "bold #f59e0b"
-        else:
-            badge_style = "#71717a"
+        is_focused = self.has_focus or self.has_class("--highlight")
 
         from rich.text import Text
         txt = Text()
-        txt.append(f"[{state}]", style=badge_style)
-        txt.append(f" {title}")
-        yield Static(txt, classes="session-item-label")
+
+        if is_focused:
+            txt.append(f"[{state}] {title}", style="bold black on #eab308")
+        else:
+            if state in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
+                badge_style = "bold #22c55e"
+            elif "FAIL" in state or "CONFLICT" in state or "REJECTED" in state:
+                badge_style = "bold #ef4444"
+            elif "AWAITING" in state or "IN_PROGRESS" in state or "RUNNING" in state:
+                badge_style = "bold #f59e0b"
+            else:
+                badge_style = "#71717a"
+
+            txt.append(f"[{state}]", style=badge_style)
+            txt.append(f" {title}", style="#eab308")
+
+        try:
+            self.query_one("#item-static", Static).update(txt)
+        except Exception:
+            pass
 
 
 class ReplyModalScreen(ModalScreen[Optional[str]]):
@@ -591,6 +610,14 @@ class JulesTUIApp(App):
             self.call_from_thread(self.update_status, f"Fetch error: {e}")
 
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
+        try:
+            list_view = self.query_one("#session-list", ListView)
+            for item in list_view.children:
+                if isinstance(item, SessionItem):
+                    item.update_rendering()
+        except Exception:
+            pass
+
         if isinstance(event.item, SessionItem):
             s = event.item.session
             sid = event.item.sid

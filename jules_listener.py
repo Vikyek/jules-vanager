@@ -164,11 +164,25 @@ def check_jules_api_queries():
 
             # Classification logic: Distinguish simple proceed confirmations from technical questions requiring AGY resolution
             full_content = (prompt_text + " " + query_text).lower()
+            query_lower = query_text.lower()
+            last_lines = " ".join([l.strip() for l in query_text.strip().splitlines() if l.strip()][-4:]).lower()
             
-            # Simple confirmation keywords
-            is_simple_proceed = any(kw in query_text.lower() for kw in [
-                "should i proceed", "shall i proceed", "confirm to proceed", "ready to proceed", "proceed with", "approval to start", "confirm implementation"
-            ]) and len(query_text.split()) < 30
+            # Simple confirmation keywords (initial plan or post-implementation finalize/PR creation)
+            proceed_patterns = [
+                "should i proceed", "shall i proceed", "confirm to proceed", "ready to proceed",
+                "proceed with", "approval to start", "confirm implementation", "would you like me to proceed",
+                "is there anything else you would like me to review or adjust",
+                "anything else you would like me to review", "before i finalize", "before finalizing",
+                "before creating a pull request", "before opening a pull request",
+                "should i open a pull request", "should i create a pull request", "create a pull request?",
+                "open a pull request?", "ready to create a pull request", "ready to open a pull request",
+                "ready to finalize", "would you like me to create a pull request", "would you like me to open a pull request",
+                "create the pull request?", "open the pull request?",
+                "let me know if you'd like me to proceed", "let me know if you would like me to proceed",
+                "let me know if you'd like me to create", "let me know if you would like me to create"
+            ]
+            
+            is_simple_proceed = any(kw in query_lower or kw in last_lines for kw in proceed_patterns)
 
             # Only flag as critical if explicitly requesting secret/credential input or irreversible destructive action
             is_critical = any(kw in full_content for kw in [
@@ -176,8 +190,17 @@ def check_jules_api_queries():
             ])
 
             if is_simple_proceed and not is_critical:
-                # Auto-handle routine proceed confirmation
-                auto_reply = "Proceed with standard implementation, run full unit tests, and format PR with summary."
+                # Distinguish finalizing/PR creation from initial plan proceed
+                is_finalize = any(kw in query_lower or kw in last_lines for kw in [
+                    "before i finalize", "before finalizing", "finalize this task",
+                    "create a pull request", "open a pull request", "create the pull request",
+                    "open the pull request", "review or adjust before"
+                ])
+                if is_finalize:
+                    auto_reply = "Looks good. Proceed to finalize the task, create the pull request, and format with a clear summary."
+                else:
+                    auto_reply = "Proceed with standard implementation, run full unit tests, and format PR with summary."
+
                 send_res = send_message(session_id, auto_reply)
                 if "error" not in send_res:
                     print(f"⚡ [Jules Listener] Auto-handled simple proceed confirmation for session {session_id}")
@@ -197,7 +220,10 @@ def check_jules_api_queries():
                     rep_name = src_ctx.get("source", "").replace("sources/github/", "").replace("sources/", "")
                     repo_dir = os.path.join(PROJECTS_DIR, os.path.basename(rep_name)) if rep_name else PROJECTS_DIR
                     
-                    agy_cmd = ["agy", "-m", "flash", "-e", "0", f"Given the task prompt: '{prompt_text[:300]}' and worker query: '{query_text[:400]}', provide a concise, expert resolution instruction in 1-2 short sentences."]
+                    agy_cmd = [
+                        "agy", "-p",
+                        f"Given the task prompt: '{prompt_text[:300]}' and worker query: '{query_text[:400]}', provide a concise, expert resolution instruction in 1-2 short sentences."
+                    ]
                     res = subprocess.run(agy_cmd, cwd=repo_dir if os.path.exists(repo_dir) else PROJECTS_DIR, capture_output=True, text=True, timeout=45)
                     generated_answer = res.stdout.strip()
                     if res.returncode == 0 and generated_answer:

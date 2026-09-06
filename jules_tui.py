@@ -23,7 +23,7 @@ from textual.worker import Worker, WorkerState
 from textual import work
 
 # Import API manager functions
-from jules_manager import list_sessions, get_session_activities, send_message, archive_session, _make_request
+from jules_manager import list_sessions, get_session_activities, send_message, archive_session, unarchive_session, _make_request
 
 CONFIG_DIR = pathlib.Path.home() / ".config" / "jules-vanager"
 CONFIG_FILE = CONFIG_DIR / "config.json"
@@ -695,8 +695,12 @@ class JulesTUIApp(App):
         list_view = self.query_one("#session-list", ListView)
         if isinstance(list_view.highlighted_child, SessionItem):
             sid = list_view.highlighted_child.sid
-            self.update_status(f"Archiving session {sid}...")
-            self.archive_worker(sid)
+            if self.show_archived:
+                self.update_status(f"Unarchiving session {sid}...")
+                self.unarchive_worker(sid)
+            else:
+                self.update_status(f"Archiving session {sid}...")
+                self.archive_worker(sid)
 
     @work(exclusive=True, thread=True)
     def archive_worker(self, sid: str) -> None:
@@ -706,6 +710,15 @@ class JulesTUIApp(App):
             self.fetch_data_worker()
         except Exception as e:
             self.call_from_thread(self.update_status, f"Archive error: {e}")
+
+    @work(exclusive=True, thread=True)
+    def unarchive_worker(self, sid: str) -> None:
+        try:
+            unarchive_session(sid)
+            self.call_from_thread(self.update_status, f"Unarchived session {sid}.")
+            self.fetch_data_worker()
+        except Exception as e:
+            self.call_from_thread(self.update_status, f"Unarchive error: {e}")
 
     def action_toggle_service(self) -> None:
         def handle_confirm(confirmed: bool) -> None:

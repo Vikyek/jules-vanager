@@ -434,6 +434,16 @@ class JulesTUIApp(App):
         color: #eab308;
     }
 
+    Header {
+        background: #eab308;
+        color: #000000;
+    }
+
+    Footer {
+        background: #000000;
+        color: #eab308;
+    }
+
     #top-title-bar {
         dock: top;
         height: 1;
@@ -449,7 +459,7 @@ class JulesTUIApp(App):
         background: #000000;
         color: #facc15;
         text-align: center;
-        border-bottom: solid #334155;
+        border-bottom: solid #eab308;
     }
 
     #left-pane {
@@ -537,7 +547,7 @@ class JulesTUIApp(App):
         self.title_pulse = False
 
     def compose(self) -> ComposeResult:
-        yield Static(" 󱚝 GOOGLE JULES API VANAGER & LISTENER TUI ", id="top-title-bar")
+        yield Header(show_clock=True)
         yield Static("Initializing Jules TUI...", id="status-bar")
         with Horizontal():
             with Container(id="left-pane"):

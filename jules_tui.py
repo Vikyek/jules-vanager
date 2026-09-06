@@ -430,7 +430,7 @@ class JulesTUIApp(App):
 
     CSS = """
     Screen {
-        background: transparent;
+        background: #000000;
         color: #eab308;
     }
 
@@ -446,29 +446,30 @@ class JulesTUIApp(App):
     #status-bar {
         dock: top;
         height: 1;
-        background: #18181b;
+        background: #000000;
         color: #facc15;
         text-align: center;
+        border-bottom: solid #334155;
     }
 
     #left-pane {
         width: 45%;
         border-right: solid #eab308;
         height: 100%;
-        background: transparent;
+        background: #000000;
     }
 
     #right-pane {
         width: 55%;
         height: 100%;
         padding: 1 2;
-        background: transparent;
+        background: #000000;
         color: #06b6d4;
     }
 
     ListView {
         height: 100%;
-        background: transparent;
+        background: #000000;
         border: none;
     }
 
@@ -476,7 +477,7 @@ class JulesTUIApp(App):
         padding: 0 1;
         height: auto;
         color: #eab308;
-        background: transparent;
+        background: #000000;
         border-bottom: none;
     }
 

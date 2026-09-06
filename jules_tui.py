@@ -1273,7 +1273,7 @@ class JulesTUIApp(App):
                 repo = s.get("repo", "paru-wrapper")
                 prompt = s.get("details") or title
                 self.update_status(f"Starting Jules session for suggestion in {repo}...")
-                self.spawn_suggestion_worker(repo, prompt)
+                self.spawn_suggestion_worker(repo, prompt, title)
             elif s.get("is_unassigned_pr") and s.get("url"):
                 webbrowser.open(s["url"])
                 self.update_status(f"Opened PR: {s['url']}")
@@ -1281,7 +1281,7 @@ class JulesTUIApp(App):
                 self.action_inspect_reply()
 
     @work(exclusive=True, thread=True)
-    def spawn_suggestion_worker(self, repo: str, prompt: str) -> None:
+    def spawn_suggestion_worker(self, repo: str, prompt: str, title: str = "") -> None:
         try:
             from jules_manager import start_session_workflow
             clean_repo = repo.replace("Vikyek/", "")
@@ -1290,8 +1290,11 @@ class JulesTUIApp(App):
                 self.call_from_thread(self.update_status, f"Error starting session: {res.get('error')}")
             else:
                 sid = res.get("id") or res.get("name", "").split("/")[-1]
-                self.call_from_thread(self.update_status, f"Spawned Jules session {sid} for suggestion!")
-                time.sleep(2)
+                if title:
+                    dismiss_suggestion(title)
+                    self.suggestions = [s for s in getattr(self, "suggestions", []) if s.get("title", "").strip() != title.strip()]
+                self.call_from_thread(self.update_status, f"Spawned session {sid}! Suggestion executed & dismissed.")
+                time.sleep(1.5)
                 self.fetch_data_worker()
         except Exception as e:
             self.call_from_thread(self.update_status, f"Error spawning suggestion session: {e}")

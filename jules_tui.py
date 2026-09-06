@@ -1150,6 +1150,8 @@ class JulesTUIApp(App):
         pr_st = check_session_pr_status(s)
         if pr_st.get("has_pr"):
             body_md += f"\n### 🐙 GitHub PR #{pr_st.get('pr_number')}\n- **URL:** {pr_st.get('url')}\n- **Mergeable:** {pr_st.get('mergeable')}\n"
+        elif s.get("url") and s.get("pr_number"):
+            body_md += f"\n### 🐙 GitHub PR #{s.get('pr_number')}\n- **URL:** {s.get('url')}\n"
 
         try:
             content = self.query_one("#detail-content", Markdown)
@@ -1159,6 +1161,8 @@ class JulesTUIApp(App):
 
     @work(thread=True)
     def fetch_session_activities_worker(self, sid: str, s: Dict[str, Any], archive_time: str) -> None:
+        if s.get("is_unassigned_pr"):
+            return
         now = time.time()
         if sid in _SESSION_ACTIVITIES_CACHE and (now - _SESSION_ACTIVITIES_CACHE_TIME.get(sid, 0)) < 45:
             return
@@ -1177,7 +1181,12 @@ class JulesTUIApp(App):
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         if isinstance(event.item, SessionItem):
-            self.action_inspect_reply()
+            s = event.item.session
+            if s.get("is_unassigned_pr") and s.get("url"):
+                webbrowser.open(s["url"])
+                self.update_status(f"Opened PR: {s['url']}")
+            else:
+                self.action_inspect_reply()
 
     def action_refresh_sessions(self) -> None:
         self.update_status("Refreshing sessions...")
@@ -1386,8 +1395,11 @@ class JulesTUIApp(App):
         list_view = self.query_one("#session-list", ListView)
         if isinstance(list_view.highlighted_child, SessionItem):
             s = list_view.highlighted_child.session
-            pr_st = check_session_pr_status(s)
-            url = pr_st.get("url")
+            # Unassigned PRs already carry url directly
+            url = s.get("url", "")
+            if not url:
+                pr_st = check_session_pr_status(s)
+                url = pr_st.get("url", "")
             if url:
                 webbrowser.open(url)
                 self.update_status(f"Opened PR: {url}")

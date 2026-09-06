@@ -366,14 +366,17 @@ class JulesTUIApp(App):
     ListItem {
         layout: horizontal;
         padding: 0 1;
+        height: 1;
         color: #eab308;
         background: #0a0a0a;
+        border-bottom: dashed #334155;
     }
 
     ListItem:focus, ListItem.--highlight {
         background: #eab308;
         color: #000000;
         text-style: bold;
+        border-bottom: none;
     }
 
     ListItem:focus #item-badge, ListItem.--highlight #item-badge {

@@ -212,6 +212,35 @@ def check_jules_api_queries():
                 "password", "private key", "secret_key", "delete production database", "manual authentication token"
             ])
 
+            # Loop Detection Guard: Check if we already sent an auto-reply/AGY reply to this session in the last 90 seconds
+            sess_events = actions_log.get(session_id, [])
+            recent_auto_reply = False
+            now_epoch = time.time()
+            for ev in reversed(sess_events):
+                if ev.get("action") in ("AUTO_REPLY", "AGY_REPLY", "UNSTUCK_PROMPT"):
+                    ev_time = ev.get("timestamp_epoch", 0)
+                    if not ev_time and ev.get("timestamp"):
+                        import datetime
+                        try:
+                            dt = datetime.datetime.strptime(ev["timestamp"], "%Y-%m-%d %H:%M:%S")
+                            ev_time = dt.timestamp()
+                        except Exception:
+                            pass
+                    if ev_time > 0 and (now_epoch - ev_time < 90):
+                        recent_auto_reply = True
+                        break
+
+            if recent_auto_reply:
+                print(f"⏳ [Jules Listener] Loop guard active for session {session_id}: Auto-reply sent <90s ago. Awaiting Jules state transition...")
+                pending_queries.append({
+                    "session_id": session_id,
+                    "state": state,
+                    "prompt": prompt_text,
+                    "activities": activities,
+                    "flagged_for_user": False
+                })
+                continue
+
             if is_simple_proceed and not is_critical:
                 # Distinguish finalizing/PR creation from initial plan proceed
                 is_finalize = any(kw in query_lower or kw in last_lines for kw in [

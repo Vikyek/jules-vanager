@@ -223,8 +223,8 @@ class SessionItem(ListItem):
     def update_rendering(self) -> None:
         state = self.session.get("state", "UNKNOWN")
         title = self.session.get("title") or self.session.get("prompt") or f"Session {self.sid}"
-        if len(title) > 60:
-            title = title[:57] + "..."
+        if len(title) > 50:
+            title = title[:47] + "..."
 
         is_focused = False
         try:
@@ -234,11 +234,16 @@ class SessionItem(ListItem):
         except Exception:
             pass
 
+        archive_time = self.session.get("archived_at") or self.session.get("updateTime") or self.session.get("createTime") or ""
+        if archive_time and "T" in archive_time:
+            archive_time = archive_time.replace("T", " ").split(".")[0][:16]
+
         from rich.text import Text
         txt = Text()
 
         if is_focused:
-            txt.append(f"[{state}] {title}", style="bold #000000 on #eab308")
+            time_suffix = f" ({archive_time})" if archive_time and (state in ("ARCHIVED", "CLOSED") or getattr(self.app, "show_archived", False)) else ""
+            txt.append(f"[{state}] {title}{time_suffix}", style="bold #000000 on #eab308")
         else:
             if state in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
                 badge_style = "bold #22c55e"
@@ -251,6 +256,8 @@ class SessionItem(ListItem):
 
             txt.append(f"[{state}]", style=badge_style)
             txt.append(f" {title}", style="#eab308")
+            if archive_time and (state in ("ARCHIVED", "CLOSED") or getattr(self.app, "show_archived", False)):
+                txt.append(f"  {archive_time}", style="#71717a")
 
         try:
             self.query_one("#item-static", Static).update(txt)
@@ -638,11 +645,15 @@ class JulesTUIApp(App):
             title = s.get("title") or s.get("prompt") or f"Session {sid}"
             state = s.get("state", "UNKNOWN")
             
+            archive_time = s.get("archived_at") or s.get("updateTime") or s.get("createTime") or "N/A"
+            if archive_time != "N/A" and "T" in archive_time:
+                archive_time = archive_time.replace("T", " ").split(".")[0][:19]
+
             header = self.query_one("#detail-header", Label)
             header.update(f"📌 {title}\nID: {sid} | State: {state}")
 
             content = self.query_one("#detail-content", Markdown)
-            body_md = f"### Session Overview\n- **ID:** `{sid}`\n- **State:** `{state}`\n- **Prompt:** {s.get('prompt', 'N/A')}\n"
+            body_md = f"### Session Overview\n- **ID:** `{sid}`\n- **State:** `{state}`\n- **Archived/Updated:** `{archive_time}`\n- **Prompt:** {s.get('prompt', 'N/A')}\n"
             content.update(body_md)
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:

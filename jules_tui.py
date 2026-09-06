@@ -429,6 +429,10 @@ class JulesTUIApp(App):
         return True, label
 
     CSS = """
+    * {
+        background: transparent;
+    }
+
     Screen {
         background: transparent;
         color: #eab308;
@@ -457,6 +461,10 @@ class JulesTUIApp(App):
         color: #eab308;
     }
 
+    FooterKey, FooterLabel {
+        background: transparent;
+    }
+
     #status-bar {
         height: auto;
         min-height: 1;
@@ -483,9 +491,12 @@ class JulesTUIApp(App):
         color: #06b6d4;
     }
 
+    Container, ScrollableContainer, ListView, ListItem, Static, Markdown, Label {
+        background: transparent;
+    }
+
     ListView {
         height: 100%;
-        background: transparent;
         border: none;
     }
 
@@ -493,7 +504,6 @@ class JulesTUIApp(App):
         padding: 0 1;
         height: auto;
         color: #eab308;
-        background: transparent;
         border-bottom: none;
     }
 

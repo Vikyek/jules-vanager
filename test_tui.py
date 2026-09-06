@@ -122,5 +122,170 @@ class TestJulesTUIApp(unittest.IsolatedAsyncioTestCase):
             app.clear_session_answering("test-sid-999")
             self.assertNotIn("test-sid-999", app.answering_sessions)
 
+    async def test_session_badge_icons_and_styling(self):
+        """Verify distinct icons and rich hex styling for session badges (commit 04e121f)."""
+        app = JulesTUIApp()
+        test_cases = [
+            ("SUGGESTION", "[💡 SUGGESTION]", "bold #eab308"),
+            ("UNASSIGNED_PR", "[🐙 UNASSIGNED PR]", "bold #c084fc"),
+            ("UNSTUCK_PROMPT", "[⚡ UNSTUCK NUDGE]", "bold #f97316"),
+            ("UNSTUCK", "[⚡ UNSTUCK NUDGE]", "bold #f97316"),
+            ("AGY_DISPATCH", "[🤖 AGY TAKEOVER]", "bold #ec4899"),
+            ("AWAITING_USER_FEEDBACK", "[❓ AWAITING INPUT]", "bold #f59e0b"),
+            ("PAUSED", "[❓ PAUSED]", "bold #f59e0b"),
+            ("AWAITING_INPUT", "[❓ AWAITING_INPUT]", "bold #f59e0b"),
+            ("IN_PROGRESS", "[⚙️ RUNNING]", "bold #3b82f6"),
+            ("RUNNING", "[⚙️ RUNNING]", "bold #3b82f6"),
+            ("COMPLETED", "[✔ COMPLETED]", "bold #22c55e"),
+            ("SUCCEEDED", "[✔ COMPLETED]", "bold #22c55e"),
+            ("RESOLVED", "[✔ COMPLETED]", "bold #22c55e"),
+            ("MERGED", "[✔ COMPLETED]", "bold #22c55e"),
+            ("FAILED", "[✖ FAILED]", "bold #ef4444"),
+            ("PR_CONFLICT", "[✖ PR_CONFLICT]", "bold #ef4444"),
+            ("REJECTED", "[✖ REJECTED]", "bold #ef4444"),
+            ("ERROR", "[✖ ERROR]", "bold #ef4444"),
+            ("UNKNOWN_STATE", "[UNKNOWN_STATE]", "#71717a"),
+        ]
+
+        async with app.run_test() as pilot:
+            for state, expected_badge, expected_style in test_cases:
+                item = SessionItem({"id": f"sid-{state}", "state": state, "title": f"Test {state}"})
+                item.app = app
+                item.update_rendering()
+                static_widget = item.query_one("#item-static")
+                rendered_text = static_widget.renderable
+                
+                # Check rendered Text span styles and content
+                full_plain = rendered_text.plain
+                self.assertTrue(full_plain.startswith(expected_badge), f"Expected {expected_badge} in {full_plain} for state {state}")
+                
+                # Verify first span style matches badge_style when not focused
+                badge_span_style = str(rendered_text.spans[0].style)
+                self.assertEqual(badge_span_style, expected_style, f"State {state} expected style {expected_style}, got {badge_span_style}")
+
+class TestScraperCommitFiltering(unittest.TestCase):
+
+    def test_deduplicate_and_filter_merge_commits(self):
+        from jules_scraper import fetch_jules_suggestions
+        from unittest.mock import patch
+        import tempfile
+        import os
+        import json
+
+        # Mock persistent suggestions containing duplicates and merge commit messages
+        mock_suggestions = [
+            {"title": "Audit repo (123456): fix(auth): prevent timing attack", "details": "Code health recommendation: fix(auth): prevent timing attack"},
+            {"title": "Audit repo (7890ab): fix(auth): prevent timing attack", "details": "Code health recommendation: fix(auth): prevent timing attack"},
+            {"title": "Audit repo (abcdef): Merge pull request #42 from dev", "details": "Code health recommendation: Merge pull request #42 from dev"},
+            {"title": "Audit repo (fedcba): Merge branch 'main' into feature", "details": "Code health recommendation: Merge branch 'main' into feature"},
+        ]
+
+        with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".json") as tmp:
+            json.dump(mock_suggestions, tmp)
+            tmp_path = tmp.name
+
+        import jules_scraper
+        orig_scanned_file = jules_scraper.SCANNED_SUGGESTIONS_FILE
+        try:
+            jules_scraper.SCANNED_SUGGESTIONS_FILE = tmp_path
+            with patch("jules_scraper.fetch_sourcery_pr_suggestions", return_value=[]):
+                results = fetch_jules_suggestions(raw_html_snippet="<div>custom HTML</div>")
+                
+                # Verify merge commits filtered out
+                titles = [s["title"] for s in results]
+                self.assertFalse(any("Merge pull request" in t for t in titles))
+                self.assertFalse(any("Merge branch" in t for t in titles))
+
+                # Verify deduplication of mock items (only 1 fix(auth) timing attack suggestion remains)
+                fix_auth_items = [s for s in results if "prevent timing attack" in s.get("details", "")]
+                self.assertEqual(len(fix_auth_items), 1)
+                self.assertIn("123456", fix_auth_items[0]["title"])
+        finally:
+            jules_scraper.SCANNED_SUGGESTIONS_FILE = orig_scanned_file
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
+
+class TestStuckRecoveryPipeline(unittest.TestCase):
+
+    def test_stage1_unstuck_nudge_trigger(self):
+        """Test Stage 1 UNSTUCK_PROMPT triggers when inactive for >300s with no previous unstuck attempt."""
+        import time
+        from unittest.mock import patch, ANY
+        from jules_listener import check_jules_api_queries
+
+        now = time.time()
+        mock_sessions = {
+            "sessions": [
+                {
+                    "name": "sessions/sess-stuck-1",
+                    "state": "IN_PROGRESS",
+                    "prompt": "Test stuck task",
+                    "sourceContext": {"source": "sources/github/owner/repo"}
+                }
+            ]
+        }
+        mock_activities = {
+            "activities": [
+                {"createTime": "2026-09-06T15:00:00Z", "agentMessaged": {"agentMessage": "Working..."}}
+            ]
+        }
+
+        with patch("jules_listener.get_active_sessions", return_value=mock_sessions), \
+             patch("jules_listener.get_session_activities", return_value=mock_activities), \
+             patch("jules_listener.send_message", return_value={"status": "ok"}) as mock_send, \
+             patch("jules_manager.log_action") as mock_log, \
+             patch("os.path.exists", return_value=False):
+
+            check_jules_api_queries()
+            mock_send.assert_called_once_with("sess-stuck-1", ANY)
+            mock_log.assert_called_once()
+            self.assertEqual(mock_log.call_args[0][1], "UNSTUCK_PROMPT")
+
+    def test_stage2_agy_takeover_trigger(self):
+        """Test Stage 2 AGY_DISPATCH triggers when Stage 1 attempt timed out (>180s) without progress."""
+        import time
+        from unittest.mock import patch
+        from jules_listener import check_jules_api_queries
+
+        mock_sessions = {
+            "sessions": [
+                {
+                    "name": "sessions/sess-stuck-2",
+                    "state": "IN_PROGRESS",
+                    "prompt": "Test stuck task stage 2",
+                    "sourceContext": {"source": "sources/github/owner/repo"}
+                }
+            ]
+        }
+        mock_activities = {
+            "activities": [
+                {"createTime": "2026-09-06T14:00:00Z", "agentMessaged": {"agentMessage": "Old progress"}}
+            ]
+        }
+        # Simulate previous UNSTUCK_PROMPT logged in actions_log at epoch 1000 (well over 180s ago)
+        mock_actions_log = {
+            "sess-stuck-2": [
+                {"action": "UNSTUCK_PROMPT", "timestamp_epoch": 1000.0}
+            ]
+        }
+
+        with patch("jules_listener.get_active_sessions", return_value=mock_sessions), \
+             patch("jules_listener.get_session_activities", return_value=mock_activities), \
+             patch("jules_listener.send_message") as mock_send, \
+             patch("json.load", return_value=mock_actions_log), \
+             patch("os.path.exists", return_value=True), \
+             patch("subprocess.run") as mock_subproc, \
+             patch("jules_manager.archive_session") as mock_archive, \
+             patch("jules_manager.log_action") as mock_log:
+
+            check_jules_api_queries()
+            mock_send.assert_not_called()
+            mock_log.assert_called_once()
+            self.assertEqual(mock_log.call_args[0][1], "AGY_DISPATCH")
+            mock_archive.assert_called_once_with("sess-stuck-2", action_by="auto", title="Test stuck task stage 2", repo="owner/repo", branch="main")
+
 if __name__ == "__main__":
     unittest.main()
+
+

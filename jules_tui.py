@@ -210,19 +210,17 @@ class SessionItem(ListItem):
         if len(title) > 60:
             title = title[:57] + "..."
 
-        badge = f"[{state}]"
         if state in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
-            badge_class = "state-success"
+            color = "#22c55e"
         elif "FAIL" in state or "CONFLICT" in state or "REJECTED" in state:
-            badge_class = "state-error"
+            color = "#ef4444"
         elif "AWAITING" in state or "IN_PROGRESS" in state or "RUNNING" in state:
-            badge_class = "state-active"
+            color = "#f59e0b"
         else:
-            badge_class = "state-neutral"
+            color = "#71717a"
 
-        badge = f"[{state}] "
-        yield Label(badge, id="item-badge", classes=badge_class)
-        yield Label(title, id="item-title")
+        markup = f"[{color} bold][{state}][/{color} bold] {title}"
+        yield Label(markup, id="item-title")
 
 
 class ReplyModalScreen(ModalScreen[Optional[str]]):

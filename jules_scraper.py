@@ -94,7 +94,7 @@ def fetch_sourcery_pr_suggestions():
         try:
             res = subprocess.run(
                 ["gh", "pr", "list", "--state", "all", "--json", "number,title,comments,reviews", "-R", repo],
-                capture_output=True, text=True, timeout=3
+                capture_output=True, text=True, timeout=1
             )
             if res.returncode == 0 and res.stdout.strip().startswith("["):
                 prs = json.loads(res.stdout)

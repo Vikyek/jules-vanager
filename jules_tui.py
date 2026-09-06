@@ -405,28 +405,10 @@ class ConfirmModalScreen(ModalScreen[bool]):
         self.dismiss(False)
 
 
-class CustomFooter(Footer):
-    show_archived = reactive(False)
-
-    def watch_show_archived(self, value: bool) -> None:
-        try:
-            target_desc = "Unarchive" if value else "Archive"
-            for screen in [self.screen, self.app]:
-                if hasattr(screen, "_bindings") and hasattr(screen._bindings, "bindings"):
-                    for binding in screen._bindings.bindings.values():
-                        if getattr(binding, "key", "") == "a":
-                            binding.description = target_desc
-        except Exception:
-            pass
-        self.call_after_refresh(self.recompose)
-
-
 class JulesTUIApp(App):
     """Main Textual application for Google Jules API session management."""
     TITLE = "Jules Vanager TUI"
     SUB_TITLE = "Google Jules API & Listener Management"
-    
-    show_archived: bool = reactive(False)
     
     BINDINGS = [
         Binding("r", "refresh_sessions", "Refresh", show=True),
@@ -562,7 +544,7 @@ class JulesTUIApp(App):
             with ScrollableContainer(id="right-pane"):
                 yield Label("Select a session from the list", id="detail-header")
                 yield Markdown("No session selected.", id="detail-content")
-        yield CustomFooter().data_bind(JulesTUIApp.show_archived)
+        yield Footer()
 
     def on_mount(self) -> None:
         self.populate_session_list()
@@ -696,26 +678,22 @@ class JulesTUIApp(App):
     def update_footer_bindings(self) -> None:
         try:
             target_desc = "Unarchive" if self.show_archived else "Archive"
-            new_bindings = []
-            for b in self.BINDINGS:
-                if isinstance(b, Binding) and b.key == "a":
-                    new_bindings.append(Binding("a", b.action, target_desc, show=b.show, key_display=b.key_display))
-                else:
-                    new_bindings.append(b)
-            self.BINDINGS = new_bindings
+            
+            # Mutate active bindings on screen map
+            if hasattr(self.screen, "_bindings") and hasattr(self.screen._bindings, "bindings"):
+                for binding in self.screen._bindings.bindings.values():
+                    if getattr(binding, "key", "") == "a":
+                        binding.description = target_desc
 
-            for screen in [self.screen, self]:
-                if hasattr(screen, "_bindings") and hasattr(screen._bindings, "bindings"):
-                    for k, binding in list(screen._bindings.bindings.items()):
-                        if getattr(binding, "key", "") == "a":
-                            binding.description = target_desc
+            # Mutate active_bindings cache map if present
+            if hasattr(self.screen, "active_bindings"):
+                for key_tuple, active_info in list(self.screen.active_bindings.items()):
+                    binding = active_info[1]
+                    if getattr(binding, "key", "") == "a":
+                        binding.description = target_desc
 
-            # Safely update FooterKey widgets without calling recompose()
-            from textual.widgets._footer import FooterKey
-            for fk in self.query(FooterKey):
-                if fk.binding and fk.binding.key == "a":
-                    fk.binding.description = target_desc
-                    fk.refresh()
+            # Notify Footer widget subscribed to bindings_updated_signal
+            self.screen.bindings_updated_signal.publish(self.screen)
         except Exception:
             pass
 

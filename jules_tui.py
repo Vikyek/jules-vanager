@@ -669,6 +669,21 @@ class JulesTUIApp(App):
 
 
 def main() -> None:
+    # Auto-kill prior jules_tui python processes silently without confirmation prompts
+    current_pid = os.getpid()
+    try:
+        res = subprocess.run(["pgrep", "-f", "python3.*jules_tui.py"], capture_output=True, text=True)
+        if res.returncode == 0:
+            for line in res.stdout.strip().splitlines():
+                try:
+                    pid = int(line.strip())
+                    if pid != current_pid:
+                        os.kill(pid, signal.SIGKILL)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
     app = JulesTUIApp()
     app.run()
 

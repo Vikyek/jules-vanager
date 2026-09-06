@@ -212,58 +212,23 @@ class SessionItem(ListItem):
         self.sid = session.get("id") or session.get("name", "").split("/")[-1]
 
     def compose(self) -> ComposeResult:
-        yield Static("", id="item-static", classes="session-item-label")
-
-    def on_mount(self) -> None:
-        self.update_rendering()
-
-    def watch_has_focus(self, value: bool) -> None:
-        self.update_rendering()
-
-    def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
-        self.update_rendering()
-
-    def update_rendering(self) -> None:
         state = self.session.get("state", "UNKNOWN")
         title = self.session.get("title") or self.session.get("prompt") or f"Session {self.sid}"
         if len(title) > 60:
             title = title[:57] + "..."
 
-        parent_list = self.ancestors
-        is_highlighted = False
-        try:
-            list_view = self.app.query_one("#session-list", ListView)
-            if list_view.highlighted_child is self:
-                is_highlighted = True
-        except Exception:
-            pass
-
-        is_focused = self.has_focus or is_highlighted or self.has_class("--highlight")
-
-        from rich.text import Text
-        txt = Text()
-
-        if is_focused:
-            self.add_class("--highlight-active")
-            txt.append(f"[{state}] {title}", style="bold #000000")
+        badge = f"[{state}]"
+        if state in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
+            badge_class = "state-success"
+        elif "FAIL" in state or "CONFLICT" in state or "REJECTED" in state:
+            badge_class = "state-error"
+        elif "AWAITING" in state or "IN_PROGRESS" in state or "RUNNING" in state:
+            badge_class = "state-active"
         else:
-            self.remove_class("--highlight-active")
-            if state in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
-                badge_style = "bold #22c55e"
-            elif "FAIL" in state or "CONFLICT" in state or "REJECTED" in state:
-                badge_style = "bold #ef4444"
-            elif "AWAITING" in state or "IN_PROGRESS" in state or "RUNNING" in state:
-                badge_style = "bold #f59e0b"
-            else:
-                badge_style = "#71717a"
+            badge_class = "state-neutral"
 
-            txt.append(f"[{state}]", style=badge_style)
-            txt.append(f" {title}", style="#eab308")
-
-        try:
-            self.query_one("#item-static", Static).update(txt)
-        except Exception:
-            pass
+        yield Label(badge, id="item-badge", classes=badge_class)
+        yield Label(f" {title}", id="item-title")
 
 
 class ReplyModalScreen(ModalScreen[Optional[str]]):
@@ -466,30 +431,34 @@ class JulesTUIApp(App):
     }
 
     ListItem {
+        layout: horizontal;
         padding: 0 1;
-        height: 1;
-        margin: 0;
+        height: auto;
         color: #eab308;
         background: #0a0a0a;
         border-bottom: dashed #334155;
     }
 
-    .session-item-label {
-        width: 100%;
-        height: 1;
+    #item-badge {
+        width: auto;
+    }
+
+    #item-title {
+        width: 1fr;
         color: #eab308;
     }
 
-    ListItem:focus, ListItem.--highlight, ListItem.--highlight-active {
-        background: #eab308 !important;
-        color: #000000 !important;
+    ListItem:focus, ListItem.--highlight {
+        background: #eab308;
+        color: #000000;
         text-style: bold;
         border-bottom: none;
     }
 
-    ListItem:focus .session-item-label, ListItem.--highlight .session-item-label, ListItem.--highlight-active .session-item-label {
-        background: #eab308 !important;
-        color: #000000 !important;
+    ListItem:focus #item-badge, ListItem.--highlight #item-badge,
+    ListItem:focus #item-title, ListItem.--highlight #item-title {
+        color: #000000;
+        background: #eab308;
         text-style: bold;
     }
 

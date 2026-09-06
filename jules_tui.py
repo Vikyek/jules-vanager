@@ -202,6 +202,27 @@ def is_listener_service_active() -> bool:
     except Exception:
         return False
 
+_SESSION_ACTIVITIES_CACHE: Dict[str, Dict[str, Any]] = {}
+_SESSION_ACTIVITIES_CACHE_TIME: Dict[str, float] = {}
+
+def parse_session_activities(activities: List[Dict[str, Any]]) -> Dict[str, Any]:
+    question = None
+    failure_reason = None
+    for a in activities:
+        if "agentMessaged" in a:
+            msg = a["agentMessaged"].get("agentMessage", "")
+            if msg:
+                question = msg
+        if "sessionFailed" in a:
+            reason = a["sessionFailed"].get("reason", "")
+            if reason:
+                failure_reason = reason
+    return {
+        "question": question,
+        "failure_reason": failure_reason,
+        "total_activities": len(activities),
+    }
+
 _SESSION_PR_STATUS_CACHE = {}
 _SESSION_PR_STATUS_CACHE_TIME = {}
 
@@ -411,8 +432,10 @@ class ReplyModalScreen(ModalScreen[Optional[str]]):
         padding: 1 2;
         background: transparent !important;
         border: thick $primary;
-        width: 70;
-        height: 18;
+        width: 85;
+        max-width: 90%;
+        height: auto;
+        max-height: 85%;
     }
 
     #dialog-title {
@@ -423,9 +446,10 @@ class ReplyModalScreen(ModalScreen[Optional[str]]):
     }
 
     #dialog-prompt {
-        color: $text;
+        color: #facc15;
         margin-bottom: 1;
-        height: 4;
+        height: auto;
+        max-height: 12;
         overflow-y: auto;
         background: transparent !important;
     }
@@ -448,15 +472,20 @@ class ReplyModalScreen(ModalScreen[Optional[str]]):
     }
     """
 
-    def __init__(self, session_id: str, prompt_text: str) -> None:
+    def __init__(self, session_id: str, prompt_text: str, question: Optional[str] = None) -> None:
         super().__init__()
         self.session_id = session_id
         self.prompt_text = prompt_text
+        self.question = question
 
     def compose(self) -> ComposeResult:
         with Container(id="dialog"):
-            yield Label(f"🤖 Reply to Session [{self.session_id}]", id="dialog-title")
-            yield Static(f"Prompt: {self.prompt_text}", id="dialog-prompt")
+            if self.question:
+                yield Label(f"❓ Jules' Question [{self.session_id}]", id="dialog-title")
+                yield Static(f"Feedback Request:\n{self.question}", id="dialog-prompt")
+            else:
+                yield Label(f"🤖 Reply to Session [{self.session_id}]", id="dialog-title")
+                yield Static(f"Prompt:\n{self.prompt_text}", id="dialog-prompt")
             yield Input(placeholder="Type message reply (or press Enter to Submit)...", id="reply-input")
             with Horizontal(id="buttons"):
                 yield Button("Cancel [Esc]", variant="error", id="cancel")
@@ -939,9 +968,59 @@ class JulesTUIApp(App):
             header = self.query_one("#detail-header", Label)
             header.update(f"📌 {title}\nID: {sid} | State: {state}")
 
+            self.render_session_details(sid, s, archive_time)
+            self.fetch_session_activities_worker(sid, s, archive_time)
+
+    def render_session_details(self, sid: str, s: Dict[str, Any], archive_time: str) -> None:
+        title = s.get("title") or s.get("prompt") or f"Session {sid}"
+        state = s.get("state", "UNKNOWN")
+        init_prompt = s.get("prompt", "N/A")
+
+        act_info = _SESSION_ACTIVITIES_CACHE.get(sid, {})
+        question = act_info.get("question")
+        failure_reason = act_info.get("failure_reason")
+        act_count = act_info.get("total_activities")
+
+        body_md = f"### Session Overview\n- **ID:** `{sid}`\n- **State:** `{state}`\n- **Updated:** `{archive_time}`\n"
+
+        if question:
+            body_md += f"\n### ❓ Jules' Feedback Request / Question\n> {question}\n\n👉 **Press `Enter` to reply directly to Jules**\n"
+
+        if failure_reason:
+            body_md += f"\n### ❌ Failure Reason\n```\n{failure_reason}\n```\n"
+
+        body_md += f"\n### 📋 Initial Prompt\n{init_prompt}\n"
+
+        if act_count is not None:
+            body_md += f"\n- **Total Activities:** {act_count}\n"
+
+        pr_st = check_session_pr_status(s)
+        if pr_st.get("has_pr"):
+            body_md += f"\n### 🐙 GitHub PR #{pr_st.get('pr_number')}\n- **URL:** {pr_st.get('url')}\n- **Mergeable:** {pr_st.get('mergeable')}\n"
+
+        try:
             content = self.query_one("#detail-content", Markdown)
-            body_md = f"### Session Overview\n- **ID:** `{sid}`\n- **State:** `{state}`\n- **Archived/Updated:** `{archive_time}`\n- **Prompt:** {s.get('prompt', 'N/A')}\n"
             content.update(body_md)
+        except Exception:
+            pass
+
+    @work(thread=True)
+    def fetch_session_activities_worker(self, sid: str, s: Dict[str, Any], archive_time: str) -> None:
+        now = time.time()
+        if sid in _SESSION_ACTIVITIES_CACHE and (now - _SESSION_ACTIVITIES_CACHE_TIME.get(sid, 0)) < 45:
+            return
+        try:
+            act_res = get_session_activities(sid)
+            activities = act_res.get("activities", []) if isinstance(act_res, dict) else []
+            parsed = parse_session_activities(activities)
+            _SESSION_ACTIVITIES_CACHE[sid] = parsed
+            _SESSION_ACTIVITIES_CACHE_TIME[sid] = now
+
+            list_view = self.query_one("#session-list", ListView)
+            if list_view.highlighted_child and getattr(list_view.highlighted_child, "sid", None) == sid:
+                self.call_from_thread(self.render_session_details, sid, s, archive_time)
+        except Exception:
+            pass
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         if isinstance(event.item, SessionItem):
@@ -999,13 +1078,24 @@ class JulesTUIApp(App):
             s = list_view.highlighted_child.session
             sid = list_view.highlighted_child.sid
             prompt = s.get("prompt") or s.get("title") or "Active Task"
+            act_info = _SESSION_ACTIVITIES_CACHE.get(sid, {})
+            question = act_info.get("question")
+            if not question:
+                try:
+                    act_res = get_session_activities(sid)
+                    activities = act_res.get("activities", []) if isinstance(act_res, dict) else []
+                    parsed = parse_session_activities(activities)
+                    _SESSION_ACTIVITIES_CACHE[sid] = parsed
+                    question = parsed.get("question")
+                except Exception:
+                    pass
 
             def handle_reply(reply_text: Optional[str]) -> None:
                 if reply_text:
                     self.update_status(f"Sending reply to session {sid}...")
                     self.send_reply_worker(sid, reply_text)
 
-            self.push_screen(ReplyModalScreen(sid, prompt), handle_reply)
+            self.push_screen(ReplyModalScreen(sid, prompt, question=question), handle_reply)
 
     @work(exclusive=True, thread=True)
     def send_reply_worker(self, sid: str, reply_text: str) -> None:

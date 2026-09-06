@@ -20,10 +20,10 @@ Standalone Google Jules API Manager, Listener Daemon, Reactive Textual TUI, and 
 
 | Binding | Action | Description |
 |---|---|---|
-| `Enter` | Reply / Inspect | Open prompt reply modal for active session |
+| `Enter` | Reply / Inspect | Open prompt reply modal with Jules' question for active session |
 | `r` | Refresh | Trigger async background data refresh |
-| `a` | Archive | Archive highlighted session |
-| `m` | Filter Mode | Cycle session filter mode (`ALL` → `ACTIVE` → `AWAITING` → `COMPLETED`) |
+| `a` | Archive / Unarchive | Toggle archive status for highlighted session |
+| `m` | Filter Mode | Cycle session filter mode (`ALL` → `ACTIVE` → `AWAITING` → `FAILED` → `COMPLETED`) |
 | `s` | Toggle Service | Start/Stop systemd user listener service |
 | `b` | Toggle Autostart | Enable/Disable systemd listener service autostart |
 | `w` | Web UI | Launch session URL in browser (`https://jules.google.com`) |
@@ -31,6 +31,7 @@ Standalone Google Jules API Manager, Listener Daemon, Reactive Textual TUI, and 
 | `q` | Quit | Clean exit |
 
 ### Modal Actions (`ReplyModalScreen`)
+- Displays Jules' question / feedback prompt directly when awaiting feedback.
 - **`[Enter]` / `Submit`**: Confirm and send prompt response.
 - **`[Esc]` / `Cancel`**: Dismiss prompt response modal without sending.
 

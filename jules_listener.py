@@ -113,15 +113,27 @@ def check_jules_api_queries():
         session_id = session.get("name", "").split("/")[-1]
         state = session.get("state", "")
 
-        # 1. Evaluate UNSTUCK_PROMPT delegation timeout (>3 mins) across ALL active states
+        # 1. Evaluate 2-Stage Loop Stuck Detection & Auto-Recovery across ALL active states
         if state not in ("ARCHIVED", "COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED", "CLOSED"):
+            activities = get_session_activities(session_id)
+            last_act_epoch = 0
+            if isinstance(activities, dict) and "activities" in activities:
+                for act in activities["activities"]:
+                    ctime = act.get("createTime", "")
+                    try:
+                        dt = datetime.datetime.fromisoformat(ctime.replace("Z", "+00:00"))
+                        ts = dt.timestamp()
+                        if ts > last_act_epoch:
+                            last_act_epoch = ts
+                    except Exception:
+                        pass
+
             last_unstuck_epoch = 0
             sess_events = actions_log.get(session_id, [])
             for ev in reversed(sess_events):
-                if ev.get("action") in ("UNSTUCK_PROMPT", "AUTO_REPLY") or "unstuck" in ev.get("message", "").lower():
+                if ev.get("action") == "UNSTUCK_PROMPT":
                     last_unstuck_epoch = ev.get("timestamp_epoch", 0)
                     if not last_unstuck_epoch and ev.get("timestamp"):
-                        import datetime
                         try:
                             dt = datetime.datetime.strptime(ev["timestamp"], "%Y-%m-%d %H:%M:%S")
                             last_unstuck_epoch = dt.timestamp()
@@ -130,44 +142,41 @@ def check_jules_api_queries():
                     if last_unstuck_epoch > 0:
                         break
 
-            if last_unstuck_epoch > 0:
-                activities = get_session_activities(session_id)
-                has_subsequent_progress = False
-                if isinstance(activities, dict) and "activities" in activities:
-                    for act in activities["activities"]:
-                        ctime = act.get("createTime", "")
-                        import datetime
-                        try:
-                            dt = datetime.datetime.fromisoformat(ctime.replace("Z", "+00:00"))
-                            if dt.timestamp() > last_unstuck_epoch + 10:
-                                if "agentMessaged" in act or "artifacts" in act or "planGenerated" in act:
-                                    has_subsequent_progress = True
-                                    break
-                        except Exception:
-                            pass
+            now = time.time()
+            prompt_txt = session.get("prompt", "")
+            clean_t = prompt_txt.splitlines()[0][:80] if prompt_txt else "Session"
+            src_ctx = session.get("sourceContext", {})
+            rep_name = src_ctx.get("source", "").replace("sources/github/", "").replace("sources/", "")
+            br_name = src_ctx.get("githubRepoContext", {}).get("startingBranch", "main")
 
-                now = time.time()
-                if not has_subsequent_progress and (now - last_unstuck_epoch > 180):
-                    print(f"🤖 [Jules Listener] Un-stick attempt timed out for session {session_id} ({int(now - last_unstuck_epoch)}s). Delegating resolution to AGY...")
-                    from jules_manager import log_action, archive_session
-                    prompt_txt = session.get("prompt", "")
-                    clean_t = prompt_txt.splitlines()[0][:80] if prompt_txt else "Session"
-                    src_ctx = session.get("sourceContext", {})
-                    rep_name = src_ctx.get("source", "").replace("sources/github/", "").replace("sources/", "")
-                    br_name = src_ctx.get("githubRepoContext", {}).get("startingBranch", "main")
-                    
-                    repo_dir = os.path.join(PROJECTS_DIR, rep_name) if rep_name else PROJECTS_DIR
-                    if os.path.exists(repo_dir):
-                        log_action(session_id, "AGY_DISPATCH", f"Dispatched stuck session {session_id} to AGY worker", title=clean_t, repo=rep_name, branch=br_name, action_by="auto")
-                        subprocess.run(["git", "fetch", "origin"], cwd=repo_dir, capture_output=True)
-                        subprocess.run(["git", "checkout", "main"], cwd=repo_dir, capture_output=True)
-                        subprocess.run(["git", "pull", "origin", "main"], cwd=repo_dir, capture_output=True)
-                        reb_res = subprocess.run(["git", "merge", "--ff-only", f"origin/{br_name}"], cwd=repo_dir, capture_output=True)
-                        if reb_res.returncode == 0:
-                            subprocess.run(["git", "push", "origin", "main"], cwd=repo_dir, capture_output=True)
-                        archive_session(session_id, action_by="auto", title=clean_t, repo=rep_name, branch=br_name)
-                        print(f"🚀 [Jules Listener] AGY successfully finalized and archived stuck session {session_id}")
-                        continue
+            # Stage 1: Auto-Recovery Nudge (UNSTUCK_PROMPT) if session inactive for >5 mins (300s) without prior unstuck attempt
+            if last_act_epoch > 0 and (now - last_act_epoch > 300) and (last_unstuck_epoch < last_act_epoch):
+                print(f"⚠️ [Jules Listener] Session {session_id} inactive for {int(now - last_act_epoch)}s. Sending Stage 1 auto-recovery nudge...")
+                unstuck_msg = "Re-evaluating task state. Please review current progress, resolve any blockers, run unit tests, and proceed to complete the task and create the pull request."
+                send_res = send_message(session_id, unstuck_msg)
+                if "error" not in send_res:
+                    from jules_manager import log_action
+                    log_action(session_id, "UNSTUCK_PROMPT", unstuck_msg, title=clean_t, repo=rep_name, branch=br_name, action_by="auto")
+                    print(f"⚡ [Jules Listener] Sent UNSTUCK_PROMPT auto-recovery nudge to session {session_id}")
+                    continue
+
+            # Stage 2: AGY Takeover Dispatch if UNSTUCK_PROMPT timed out (>3 mins / 180s) without subsequent progress
+            has_subsequent_progress = last_act_epoch > last_unstuck_epoch
+            if last_unstuck_epoch > 0 and not has_subsequent_progress and (now - last_unstuck_epoch > 180):
+                print(f"🤖 [Jules Listener] Stage 1 un-stick attempt timed out for session {session_id} ({int(now - last_unstuck_epoch)}s). Executing Stage 2 AGY takeover...")
+                from jules_manager import log_action, archive_session
+                repo_dir = os.path.join(PROJECTS_DIR, rep_name) if rep_name else PROJECTS_DIR
+                if os.path.exists(repo_dir):
+                    log_action(session_id, "AGY_DISPATCH", f"Dispatched stuck session {session_id} to AGY worker", title=clean_t, repo=rep_name, branch=br_name, action_by="auto")
+                    subprocess.run(["git", "fetch", "origin"], cwd=repo_dir, capture_output=True)
+                    subprocess.run(["git", "checkout", "main"], cwd=repo_dir, capture_output=True)
+                    subprocess.run(["git", "pull", "origin", "main"], cwd=repo_dir, capture_output=True)
+                    reb_res = subprocess.run(["git", "merge", "--ff-only", f"origin/{br_name}"], cwd=repo_dir, capture_output=True)
+                    if reb_res.returncode == 0:
+                        subprocess.run(["git", "push", "origin", "main"], cwd=repo_dir, capture_output=True)
+                    archive_session(session_id, action_by="auto", title=clean_t, repo=rep_name, branch=br_name)
+                    print(f"🚀 [Jules Listener] AGY successfully finalized and archived stuck session {session_id}")
+                    continue
 
         if state in ("AWAITING_INPUT", "USER_INPUT_REQUIRED", "PENDING_REVIEW", "AWAITING_USER_FEEDBACK", "PAUSED"):
             activities = get_session_activities(session_id)

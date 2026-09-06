@@ -458,14 +458,39 @@ class SessionItem(ListItem):
             badge_text = "FAILED" if state == "FAILED" else state
             badge_style = "bold #ef4444"
 
+        # Calculate individual running time timer for active sessions
+        created_str = self.session.get("createTime") or self.session.get("created_at") or ""
+        elapsed_str = ""
+        if created_str and state not in ("SUGGESTION", "UNASSIGNED_PR"):
+            try:
+                import datetime
+                clean_c = created_str.replace("Z", "").split(".")[0]
+                if "T" in clean_c:
+                    dt = datetime.datetime.strptime(clean_c, "%Y-%m-%dT%H:%M:%S")
+                else:
+                    dt = datetime.datetime.strptime(clean_c, "%Y-%m-%d %H:%M:%S")
+                elapsed_secs = int(time.time() - dt.timestamp())
+                if elapsed_secs >= 0:
+                    mins, secs = divmod(elapsed_secs, 60)
+                    hrs, mins = divmod(mins, 60)
+                    if hrs > 0:
+                        elapsed_str = f"⏱ {hrs}h{mins:02d}m{secs:02d}s"
+                    else:
+                        elapsed_str = f"⏱ {mins}m{secs:02d}s"
+            except Exception:
+                pass
+
         display_badge = f"[{badge_icon}{badge_text}]"
+        timer_text = f" {elapsed_str}" if elapsed_str else ""
 
         if is_focused:
             time_suffix = f" ({archive_time})" if archive_time and (state in ("ARCHIVED", "CLOSED") or getattr(self.app, "show_archived", False)) else ""
-            txt.append(f"{display_badge} {title}{time_suffix}", style="bold #000000 on #eab308")
+            txt.append(f"{display_badge} {title}{timer_text}{time_suffix}", style="bold #000000 on #eab308")
         else:
             txt.append(display_badge, style=badge_style)
             txt.append(f" {title}", style="#eab308")
+            if elapsed_str:
+                txt.append(f"  {elapsed_str}", style="bold #38bdf8")
             if archive_time and (state in ("ARCHIVED", "CLOSED") or getattr(self.app, "show_archived", False)):
                 txt.append(f"  {archive_time}", style="#71717a")
 
@@ -1004,6 +1029,15 @@ class JulesTUIApp(App):
 
             bar.update(f" {panel_str} | {listener_str} | {self.status_msg}")
 
+            # Live timer tick for active session items every 1s
+            if self.spinner_idx % 10 == 0:
+                list_view = self.query_one("#session-list", ListView)
+                for item in list_view.children:
+                    if isinstance(item, SessionItem):
+                        st = item.session.get("state", "").upper()
+                        if "IN_PROGRESS" in st or "RUNNING" in st or "AWAITING" in st or "PAUSED" in st or item.session.get("is_agy_stolen"):
+                            item.update_rendering()
+
             if getattr(self, "answering_sessions", None):
                 now = time.time()
                 expired = [sid for sid, ts in self.answering_sessions.items() if (now - ts) > 180]
@@ -1234,7 +1268,22 @@ class JulesTUIApp(App):
         failure_reason = act_info.get("failure_reason")
         act_count = act_info.get("total_activities")
 
-        body_md = f"### Session Overview\n- **ID:** `{sid}`\n- **State:** `{display_state}`\n- **Updated:** `{archive_time}`\n"
+        created_str = s.get("createTime") or s.get("created_at") or ""
+        running_time_md = ""
+        if created_str:
+            try:
+                import datetime
+                clean_c = created_str.replace("Z", "").split(".")[0]
+                dt = datetime.datetime.strptime(clean_c, "%Y-%m-%dT%H:%M:%S" if "T" in clean_c else "%Y-%m-%d %H:%M:%S")
+                elapsed_secs = int(time.time() - dt.timestamp())
+                if elapsed_secs >= 0:
+                    mins, secs = divmod(elapsed_secs, 60)
+                    hrs, mins = divmod(mins, 60)
+                    running_time_md = f"- **Running Time:** `{hrs}h {mins:02d}m {secs:02d}s`\n" if hrs > 0 else f"- **Running Time:** `{mins}m {secs:02d}s`\n"
+            except Exception:
+                pass
+
+        body_md = f"### Session Overview\n- **ID:** `{sid}`\n- **State:** `{display_state}`\n{running_time_md}- **Updated:** `{archive_time}`\n"
 
         if is_answering:
             spinner = self.spinner_frames[self.spinner_idx % len(self.spinner_frames)]

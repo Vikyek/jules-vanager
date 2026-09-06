@@ -322,37 +322,64 @@ class JulesTUIApp(App):
 
     CSS = """
     Screen {
-        layout: horizontal;
+        background: #000000;
+        color: #eab308;
+    }
+
+    #top-title-bar {
+        dock: top;
+        height: 1;
+        background: #eab308;
+        color: #000000;
+        text-align: center;
+        text-style: bold;
+    }
+
+    #status-bar {
+        dock: top;
+        height: 1;
+        background: #18181b;
+        color: #facc15;
+        text-align: center;
     }
 
     #left-pane {
         width: 45%;
-        border-right: heavy $primary;
+        border-right: solid #eab308;
         height: 100%;
+        background: #0a0a0a;
     }
 
     #right-pane {
         width: 55%;
         height: 100%;
         padding: 1 2;
-    }
-
-    #status-bar {
-        dock: top;
-        height: 1;
-        background: $primary;
-        color: $text;
-        text-align: center;
-        text-style: bold;
+        background: #050505;
+        color: #06b6d4;
     }
 
     ListView {
         height: 100%;
+        background: #0a0a0a;
     }
 
     ListItem {
         layout: horizontal;
         padding: 0 1;
+        color: #eab308;
+        background: #0a0a0a;
+    }
+
+    ListItem:focus, ListItem.--highlight {
+        background: #eab308;
+        color: #000000;
+        text-style: bold;
+    }
+
+    ListItem:focus #item-badge, ListItem.--highlight #item-badge {
+        color: #000000;
+        background: #eab308;
+        text-style: bold;
     }
 
     #item-title {
@@ -360,32 +387,33 @@ class JulesTUIApp(App):
     }
 
     .state-success {
-        color: $success;
+        color: #22c55e;
         text-style: bold;
     }
 
     .state-error {
-        color: $error;
+        color: #ef4444;
         text-style: bold;
     }
 
     .state-active {
-        color: $warning;
+        color: #f59e0b;
         text-style: bold;
     }
 
     .state-neutral {
-        color: $text-muted;
+        color: #71717a;
     }
 
     #detail-header {
         text-style: bold;
-        color: $accent;
+        color: #eab308;
         margin-bottom: 1;
     }
 
     #detail-content {
         height: 100%;
+        color: #38bdf8;
     }
     """
 
@@ -396,7 +424,7 @@ class JulesTUIApp(App):
         self.status_msg: str = "Ready"
 
     def compose(self) -> ComposeResult:
-        yield Header(show_clock=True)
+        yield Static(" 󱚝 GOOGLE JULES API VANAGER & LISTENER TUI ", id="top-title-bar")
         yield Static("Initializing Jules TUI...", id="status-bar")
         with Horizontal():
             with Container(id="left-pane"):

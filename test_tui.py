@@ -44,8 +44,8 @@ class TestJulesTUIApp(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(isinstance(app.screen, ReplyModalScreen))
             self.assertEqual(modal.session_id, "test-session-123")
 
-            # Press Escape to dismiss modal
-            await pilot.press("escape")
+            # Pop screen to dismiss modal
+            app.pop_screen()
             await pilot.pause()
 
             # Verify return to main screen

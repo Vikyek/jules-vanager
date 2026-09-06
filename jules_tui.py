@@ -226,6 +226,10 @@ class SessionItem(ListItem):
 
 class ReplyModalScreen(ModalScreen[Optional[str]]):
     """Modal screen for sending prompt responses to an active session."""
+    BINDINGS = [
+        Binding("escape", "dismiss_modal", "Cancel", show=True),
+    ]
+
     DEFAULT_CSS = """
     ReplyModalScreen {
         align: center middle;
@@ -294,6 +298,9 @@ class ReplyModalScreen(ModalScreen[Optional[str]]):
     def on_input_submitted(self, event: Input.Submitted) -> None:
         val = event.value.strip()
         self.dismiss(val if val else None)
+
+    def action_dismiss_modal(self) -> None:
+        self.dismiss(None)
 
 
 class JulesTUIApp(App):

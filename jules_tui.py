@@ -436,7 +436,7 @@ class JulesTUIApp(App):
 
     #header-container {
         dock: top;
-        height: 2;
+        height: 3;
         width: 100%;
     }
 

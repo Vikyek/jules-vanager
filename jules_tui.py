@@ -413,7 +413,7 @@ class JulesTUIApp(App):
     BINDINGS = [
         Binding("r", "refresh_sessions", "Refresh", show=True),
         Binding("a", "archive_selected", "Archive", show=True),
-        Binding("v", "toggle_archived", "Archived View", show=True),
+        Binding("v", "toggle_archived", "Archived Panel", show=True),
         Binding("m", "cycle_filter", "Filter Mode", show=True),
         Binding("enter", "inspect_reply", "Reply / Inspect", show=True),
         Binding("s", "toggle_service", "Toggle Service", show=True),

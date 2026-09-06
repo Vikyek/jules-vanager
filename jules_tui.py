@@ -557,11 +557,11 @@ class ReplyModalScreen(ModalScreen[Optional[str]]):
             if self.question:
                 yield Label(f"❓ Jules' Question [{self.session_id}]", id="dialog-title")
                 with VerticalScroll(id="dialog-scroll"):
-                    yield Static(f"Feedback Request:\n\n{self.question}", id="dialog-prompt")
+                    yield Static(f"Feedback Request:\n\n{self.question}", id="dialog-prompt", markup=False)
             else:
                 yield Label(f"🤖 Reply to Session [{self.session_id}]", id="dialog-title")
                 with VerticalScroll(id="dialog-scroll"):
-                    yield Static(f"Prompt:\n\n{self.prompt_text}", id="dialog-prompt")
+                    yield Static(f"Prompt:\n\n{self.prompt_text}", id="dialog-prompt", markup=False)
             yield TextArea(
                 id="reply-input",
                 show_line_numbers=False,
@@ -683,7 +683,7 @@ class ConfirmModalScreen(ModalScreen[bool]):
     def compose(self) -> ComposeResult:
         with Container(id="confirm-dialog"):
             yield Label(self.title_text, id="confirm-title")
-            yield Static(self.prompt_text, id="confirm-prompt")
+            yield Static(self.prompt_text, id="confirm-prompt", markup=False)
             with Horizontal(id="confirm-buttons"):
                 yield Button("Cancel [Esc]", variant="error", id="cancel")
                 yield Button("Confirm [Enter]", variant="primary", id="confirm")

@@ -1371,7 +1371,21 @@ class JulesTUIApp(App):
             self.call_from_thread(self.update_status, f"Error spawning suggestion session: {e}")
 
     def action_refresh_sessions(self) -> None:
-        self.update_status("Refreshing sessions...")
+        """Dramatically refreshes UI display, purges internal caches, and re-fetches live data."""
+        global _SESSION_ACTIVITIES_CACHE, _SESSION_ACTIVITIES_CACHE_TIME, _SESSION_PR_STATUS_CACHE, _SESSION_PR_STATUS_CACHE_TIME
+        _SESSION_ACTIVITIES_CACHE.clear()
+        _SESSION_ACTIVITIES_CACHE_TIME.clear()
+        _SESSION_PR_STATUS_CACHE.clear()
+        _SESSION_PR_STATUS_CACHE_TIME.clear()
+
+        self.update_status("⚡ DRAMATIC REFRESH: Purged caches & re-fetching live sessions...")
+        try:
+            list_view = self.query_one("#session-list", ListView)
+            list_view.clear()
+            list_view.mount(ListItem(Label("🔄 Refreshing display...", classes="state-active")))
+        except Exception:
+            pass
+
         self.fetch_data_worker()
 
     def action_scroll_detail_up(self) -> None:

@@ -217,21 +217,18 @@ class SessionItem(ListItem):
         if len(title) > 60:
             title = title[:57] + "..."
 
-        from rich.text import Text
-
+        badge = f"[{state}]"
         if state in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
-            color = "bold green"
+            badge_class = "state-success"
         elif "FAIL" in state or "CONFLICT" in state or "REJECTED" in state:
-            color = "bold red"
+            badge_class = "state-error"
         elif "AWAITING" in state or "IN_PROGRESS" in state or "RUNNING" in state:
-            color = "bold yellow"
+            badge_class = "state-active"
         else:
-            color = "dim white"
+            badge_class = "state-neutral"
 
-        txt = Text()
-        txt.append(f"[{state}]", style=color)
-        txt.append(f" {title}")
-        yield Static(txt, classes="item-title")
+        yield Label(badge, classes=f"item-badge {badge_class}")
+        yield Label(f" {title}", classes="item-title")
 
 
 class ReplyModalScreen(ModalScreen[Optional[str]]):
@@ -453,11 +450,10 @@ class JulesTUIApp(App):
         border-bottom: none;
     }
 
-    ListItem:focus Static, ListItem.--highlight Static,
-    ListItem:focus Label, ListItem.--highlight Label,
+    ListItem:focus .item-badge, ListItem.--highlight .item-badge,
     ListItem:focus .item-title, ListItem.--highlight .item-title {
-        color: #000000;
-        background: #eab308;
+        color: #000000 !important;
+        background: #eab308 !important;
         text-style: bold;
     }
 
@@ -470,7 +466,6 @@ class JulesTUIApp(App):
         width: 1fr;
     }
 
-    /* Increase specificity so focus/highlight doesn't override */
     ListItem .item-badge.state-success {
         color: #22c55e;
         text-style: bold;

@@ -664,9 +664,21 @@ class JulesTUIApp(App):
         self.update_status("Refreshing sessions...")
         self.fetch_data_worker()
 
+    def update_footer_bindings(self) -> None:
+        try:
+            footer = self.query_one(Footer)
+            # Dynamically update description for binding 'a'
+            for binding in self._bindings.bindings.values():
+                if binding.key == "a":
+                    binding.description = "Unarchive" if self.show_archived else "Archive"
+            footer.refresh(layout=True)
+        except Exception:
+            pass
+
     def action_cycle_filter(self) -> None:
         if self.show_archived:
             self.show_archived = False
+            self.update_footer_bindings()
         modes = ["ALL", "ACTIVE", "AWAITING", "COMPLETED"]
         idx = (modes.index(self.filter_mode) + 1) % len(modes)
         self.filter_mode = modes[idx]
@@ -675,6 +687,7 @@ class JulesTUIApp(App):
 
     def action_toggle_archived(self) -> None:
         self.show_archived = not self.show_archived
+        self.update_footer_bindings()
         view_str = "Archived Sessions" if self.show_archived else f"Active Sessions ({self.filter_mode})"
         self.update_status(f"Switched view to {view_str}")
         self.populate_session_list()

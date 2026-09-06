@@ -220,8 +220,8 @@ class SessionItem(ListItem):
         else:
             badge_class = "state-neutral"
 
-        yield Label(badge, id="item-badge", classes=badge_class)
-        yield Label(f" {title}", id="item-title")
+        yield Label(badge, classes=f"item-badge {badge_class}")
+        yield Label(f" {title}", classes="item-title")
 
 
 class ReplyModalScreen(ModalScreen[Optional[str]]):
@@ -438,13 +438,13 @@ class JulesTUIApp(App):
         text-style: bold;
     }
 
-    ListItem:focus #item-badge, ListItem.--highlight #item-badge {
+    ListItem:focus .item-badge, ListItem.--highlight .item-badge {
         color: #000000;
         background: #eab308;
         text-style: bold;
     }
 
-    #item-title {
+    .item-title {
         width: 1fr;
     }
 
@@ -668,18 +668,24 @@ class JulesTUIApp(App):
 
 
 def main() -> None:
-    # Auto-kill prior jules_tui instances silently without confirmation prompts
+    # Auto-kill prior jules_tui instances and their parent kitty windows silently
     current_pid = os.getpid()
     try:
-        res = subprocess.run(["pgrep", "-f", "jules_tui"], capture_output=True, text=True)
-        if res.returncode == 0:
-            for line in res.stdout.strip().splitlines():
-                try:
-                    pid = int(line.strip())
-                    if pid != current_pid:
-                        os.kill(pid, signal.SIGKILL)
-                except Exception:
-                    pass
+        kill_script = f"""
+        for pid in $(pgrep -f "jules_tui"); do
+            if [ "$pid" != "{current_pid}" ] && [ "$pid" != $$ ]; then
+                ppid=$(ps -o ppid= -p "$pid" | grep -o '[0-9]*')
+                if [ -n "$ppid" ]; then
+                    pname=$(ps -o comm= -p "$ppid" | tr -d ' ')
+                    if [ "$pname" = "kitty" ]; then
+                        kill -9 "$ppid" 2>/dev/null
+                    fi
+                fi
+                kill -9 "$pid" 2>/dev/null
+            fi
+        done
+        """
+        subprocess.run(kill_script, shell=True, executable="/bin/bash")
     except Exception:
         pass
 

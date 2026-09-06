@@ -431,6 +431,26 @@ def check_and_handle_jules_prs(repo_path):
                 and mergeable in ("MERGEABLE", "CLEAN")
             )
 
+            # Auto-update PR branch if out-of-date or behind main
+            if mergeable in ("BEHIND", "DIRTY", "UNKNOWN", "OUT_OF_DATE") or not is_eligible_for_merge:
+                try:
+                    # Attempt GitHub CLI auto update-branch first
+                    upd_res = subprocess.run(["gh", "pr", "update-branch", str(number)], cwd=repo_path, capture_output=True, text=True)
+                    if upd_res.returncode == 0:
+                        print(f"🔄 [Jules Listener] Auto-updated branch '{branch}' for PR #{number} via gh CLI.")
+                    else:
+                        # Fallback: rebase locally against origin/main and push
+                        subprocess.run(["git", "fetch", "origin", "main"], cwd=repo_path, capture_output=True)
+                        reb_res = subprocess.run(["git", "rebase", "origin/main", branch], cwd=repo_path, capture_output=True)
+                        if reb_res.returncode == 0:
+                            psh_res = subprocess.run(["git", "push", "--force-with-lease", "origin", branch], cwd=repo_path, capture_output=True)
+                            if psh_res.returncode == 0:
+                                print(f"🔄 [Jules Listener] Auto-rebased and updated branch '{branch}' for PR #{number} locally.")
+                        else:
+                            subprocess.run(["git", "rebase", "--abort"], cwd=repo_path, capture_output=True)
+                except Exception:
+                    pass
+
             if is_eligible_for_merge:
                 # Attempt gh pr merge
                 merge_cmd = ["gh", "pr", "merge", str(number), "--merge", "--auto"]

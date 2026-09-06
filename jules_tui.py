@@ -739,6 +739,7 @@ class JulesTUIApp(App):
         Binding("r", "refresh_sessions", "Refresh", show=True),
         Binding("g", "toggle_suggestions", "Suggestions Panel", show=True),
         Binding("d", "dismiss_suggestion_action", "Dismiss Suggestion", show=True),
+        Binding("x", "steal_agy_suggestion_action", "AGY Steal Suggestion", show=True),
         Binding("a", "archive_selected", "Archive", show=True),
         Binding("v", "toggle_archived", "Archived Panel", show=True),
         Binding("m", "cycle_filter", "Filter Mode", show=True),
@@ -1203,7 +1204,7 @@ class JulesTUIApp(App):
             details = s.get("details") or init_prompt
             repo = s.get("repo", "Vikyek/paru-wrapper")
             source = s.get("source", "scraped")
-            body_md = f"### 💡 Panel Suggestion\n- **Title:** {title}\n- **Repository:** `{repo}`\n- **Source:** `{source}`\n\n### 📝 Recommendation Details\n{details}\n\n👉 **Press `Enter` to spawn a new Jules session with this suggestion!**\n"
+            body_md = f"### 💡 Panel Suggestion\n- **Title:** {title}\n- **Repository:** `{repo}`\n- **Source:** `{source}`\n\n### 📝 Recommendation Details\n{details}\n\n👉 **Press `Enter` to spawn a new Jules session with this suggestion!**\n⚡ **Press `x` to STEAL prompt and execute directly via AGY CLI!**\n"
             try:
                 content = self.query_one("#detail-content", Markdown)
                 content.update(body_md)
@@ -1484,6 +1485,46 @@ class JulesTUIApp(App):
                     self.populate_session_list()
                     return
         self.update_status("Highlight a suggestion to dismiss.")
+
+    def action_steal_agy_suggestion_action(self) -> None:
+        list_view = self.query_one("#session-list", ListView)
+        if isinstance(list_view.highlighted_child, SessionItem):
+            s = list_view.highlighted_child.session
+            if s.get("is_suggestion"):
+                title = s.get("title", "Suggestion Task").strip()
+                repo = s.get("repo", "paru-wrapper")
+                prompt = s.get("details") or title
+                
+                # Instantly dismiss suggestion on UI thread
+                if title:
+                    dismiss_suggestion(title)
+                    self.suggestions = [sug for sug in getattr(self, "suggestions", []) if sug.get("title", "").strip() != title]
+                    self.populate_session_list()
+
+                self.update_status(f"Stealing suggestion for AGY execution in {repo}...")
+                self.steal_agy_worker(repo, prompt, title)
+                return
+        self.update_status("Highlight a suggestion to steal for AGY.")
+
+    @work(exclusive=True, thread=True)
+    def steal_agy_worker(self, repo: str, prompt: str, title: str = "") -> None:
+        try:
+            clean_repo = repo.replace("Vikyek/", "")
+            target_dir = os.path.expanduser(f"~/Projects/{clean_repo}")
+            if not os.path.exists(target_dir):
+                target_dir = os.path.expanduser("~/Projects")
+
+            cmd = ["agy", "-p", f"Task stole from Jules suggestion: {prompt}"]
+            self.call_from_thread(self.update_status, f"Launching AGY CLI worker in {clean_repo}...")
+            res = subprocess.run(cmd, cwd=target_dir, capture_output=True, text=True, timeout=120)
+            
+            if res.returncode == 0:
+                self.call_from_thread(self.update_status, f"AGY successfully executed suggestion: {title[:40]}...")
+            else:
+                err_text = res.stderr.strip()[:100] or res.stdout.strip()[:100] or "Unknown exit code"
+                self.call_from_thread(self.update_status, f"AGY worker exited with error: {err_text}")
+        except Exception as e:
+            self.call_from_thread(self.update_status, f"Error in AGY worker: {e}")
 
     def action_archive_selected(self) -> None:
         list_view = self.query_one("#session-list", ListView)

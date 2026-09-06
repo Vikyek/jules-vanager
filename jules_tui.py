@@ -447,11 +447,17 @@ class JulesTUIApp(App):
     }
 
     ListItem:focus, ListItem.--highlight {
-        background: #1f2937;
+        background: #eab308;
+        color: #000000;
+        text-style: bold;
+        border-bottom: none;
     }
 
+    ListItem:focus Static, ListItem.--highlight Static,
+    ListItem:focus Label, ListItem.--highlight Label,
     ListItem:focus .item-title, ListItem.--highlight .item-title {
-        color: #facc15;
+        color: #000000;
+        background: #eab308;
         text-style: bold;
     }
 

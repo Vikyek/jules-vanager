@@ -12,6 +12,7 @@ import time
 import subprocess
 import webbrowser
 import pathlib
+import signal
 from typing import List, Dict, Any, Optional, Tuple
 
 from textual.app import App, ComposeResult
@@ -273,14 +274,34 @@ class ReplyModalScreen(ModalScreen[Optional[str]]):
     ]
 
     DEFAULT_CSS = """
+    $surface: transparent;
+    $surface-lighten-1: transparent;
+    $surface-lighten-2: transparent;
+    $surface-lighten-3: transparent;
+    $surface-darken-1: transparent;
+    $surface-darken-2: transparent;
+    $surface-darken-3: transparent;
+    $panel: transparent;
+    $panel-lighten-1: transparent;
+    $panel-darken-1: transparent;
+    $background: transparent;
+    $boost: transparent;
+    $footer-background: transparent;
+    $footer-description-background: transparent;
+    $footer-key-background: transparent;
+
+    * {
+        background: transparent !important;
+    }
+
     ReplyModalScreen {
         align: center middle;
-        background: transparent;
+        background: transparent !important;
     }
 
     #dialog {
         padding: 1 2;
-        background: transparent;
+        background: transparent !important;
         border: thick $primary;
         width: 70;
         height: 18;
@@ -290,7 +311,7 @@ class ReplyModalScreen(ModalScreen[Optional[str]]):
         text-style: bold;
         color: $accent;
         margin-bottom: 1;
-        background: transparent;
+        background: transparent !important;
     }
 
     #dialog-prompt {
@@ -298,23 +319,24 @@ class ReplyModalScreen(ModalScreen[Optional[str]]):
         margin-bottom: 1;
         height: 4;
         overflow-y: auto;
-        background: transparent;
+        background: transparent !important;
     }
 
-    Input {
+    Input, Input:focus, Input.--cursor {
         margin: 1 0;
-        background: transparent;
+        background: transparent !important;
+        border: tall #eab308;
     }
 
     #buttons {
         height: 3;
         align: right middle;
-        background: transparent;
+        background: transparent !important;
     }
 
-    Button {
+    Button, Button:focus, Button:hover {
         margin-left: 1;
-        background: transparent;
+        background: transparent !important;
     }
     """
 
@@ -353,14 +375,34 @@ class ConfirmModalScreen(ModalScreen[bool]):
     ]
 
     DEFAULT_CSS = """
+    $surface: transparent;
+    $surface-lighten-1: transparent;
+    $surface-lighten-2: transparent;
+    $surface-lighten-3: transparent;
+    $surface-darken-1: transparent;
+    $surface-darken-2: transparent;
+    $surface-darken-3: transparent;
+    $panel: transparent;
+    $panel-lighten-1: transparent;
+    $panel-darken-1: transparent;
+    $background: transparent;
+    $boost: transparent;
+    $footer-background: transparent;
+    $footer-description-background: transparent;
+    $footer-key-background: transparent;
+
+    * {
+        background: transparent !important;
+    }
+
     ConfirmModalScreen {
         align: center middle;
-        background: transparent;
+        background: transparent !important;
     }
 
     #confirm-dialog {
         padding: 1 2;
-        background: transparent;
+        background: transparent !important;
         border: thick $warning;
         width: 60;
         height: 12;
@@ -370,24 +412,24 @@ class ConfirmModalScreen(ModalScreen[bool]):
         text-style: bold;
         color: $warning;
         margin-bottom: 1;
-        background: transparent;
+        background: transparent !important;
     }
 
     #confirm-prompt {
         color: $text;
         margin-bottom: 1;
-        background: transparent;
+        background: transparent !important;
     }
 
     #confirm-buttons {
         height: 3;
         align: right middle;
-        background: transparent;
+        background: transparent !important;
     }
 
-    Button {
+    Button, Button:focus, Button:hover {
         margin-left: 1;
-        background: transparent;
+        background: transparent !important;
     }
     """
 
@@ -441,12 +483,18 @@ class JulesTUIApp(App):
     $surface: transparent;
     $surface-lighten-1: transparent;
     $surface-lighten-2: transparent;
+    $surface-lighten-3: transparent;
     $surface-darken-1: transparent;
-    $background: transparent;
+    $surface-darken-2: transparent;
+    $surface-darken-3: transparent;
     $panel: transparent;
     $panel-lighten-1: transparent;
     $panel-darken-1: transparent;
+    $background: transparent;
     $boost: transparent;
+    $footer-background: transparent;
+    $footer-description-background: transparent;
+    $footer-key-background: transparent;
 
     * {
         background: transparent !important;
@@ -480,7 +528,7 @@ class JulesTUIApp(App):
         color: #eab308;
     }
 
-    FooterKey, FooterLabel, FooterKey .footer-key--key, FooterKey .footer-key--description {
+    FooterKey, FooterLabel, FooterKey .footer-key--key, FooterKey .footer-key--description, Footer > .footer--highlight {
         background: transparent !important;
     }
 
@@ -510,11 +558,11 @@ class JulesTUIApp(App):
         color: #06b6d4;
     }
 
-    Container, ScrollableContainer, ListView, ListItem, Static, Markdown, MarkdownBlock, MarkdownHeader, MarkdownParagraph, MarkdownUnorderedList, MarkdownOrderedList, MarkdownListItem, MarkdownFence, MarkdownCodeBlock, MarkdownTable, MarkdownTableCell, MarkdownTableTitle, Label, Input, Button {
+    Container, ScrollableContainer, Vertical, Horizontal, ListView, ListItem, Static, Label, Input, Button, Header, Footer, FooterKey, FooterLabel, Markdown, MarkdownBlock, MarkdownHeader, MarkdownParagraph, MarkdownUnorderedList, MarkdownOrderedList, MarkdownListItem, MarkdownFence, MarkdownCodeBlock, MarkdownTable, MarkdownTableCell, MarkdownTableTitle, ScrollBar, ScrollBarCorner, ScrollbarHandle, ScrollBarHandle, ScrollBarGrip {
         background: transparent !important;
     }
 
-    Input, Input:focus, Input.--cursor {
+    Input, Input:focus, Input.--cursor, Input > .input--placeholder {
         background: transparent !important;
         border: tall #eab308;
     }
@@ -550,11 +598,11 @@ class JulesTUIApp(App):
         color: #000000 !important;
     }
 
-    Markdown, MarkdownBlock, MarkdownHeader, MarkdownParagraph, MarkdownUnorderedList, MarkdownOrderedList, MarkdownListItem, MarkdownFence, MarkdownCodeBlock, MarkdownTable, MarkdownTableCell, MarkdownTableTitle {
+    Markdown, MarkdownBlock, MarkdownHeader, MarkdownParagraph, MarkdownUnorderedList, MarkdownOrderedList, MarkdownListItem, MarkdownFence, MarkdownCodeBlock, MarkdownTable, MarkdownTableCell, MarkdownTableTitle, MarkdownQuote, MarkdownBullet, MarkdownEmphasis, MarkdownStrong {
         background: transparent !important;
     }
 
-    ScrollBar {
+    ScrollBar, ScrollBarCorner, ScrollBarHandle, ScrollBarGrip, ScrollBar.--vertical, ScrollBar.--horizontal {
         background: transparent !important;
     }
 

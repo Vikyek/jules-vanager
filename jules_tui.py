@@ -606,11 +606,15 @@ def main() -> None:
     # Force auto-kill all prior instances and launcher windows referencing jules_tui.py
     current_pid = os.getpid()
     try:
-        out = subprocess.check_output(["pgrep", "-f", "jules_tui.py"], text=True)
-        for line in out.strip().splitlines():
-            pid = int(line.strip())
-            if pid != current_pid:
-                subprocess.run(["kill", "-9", str(pid)], stderr=subprocess.DEVNULL)
+        res = subprocess.run(["pgrep", "-f", "jules_tui.py"], capture_output=True, text=True)
+        if res.returncode == 0:
+            for line in res.stdout.strip().splitlines():
+                try:
+                    pid = int(line.strip())
+                    if pid != current_pid:
+                        os.kill(pid, signal.SIGKILL)
+                except Exception:
+                    pass
     except Exception:
         pass
 

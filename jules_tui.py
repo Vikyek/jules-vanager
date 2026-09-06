@@ -220,7 +220,9 @@ class SessionItem(ListItem):
         else:
             badge_class = "state-neutral"
 
-        yield Label(f"[{state}] {title}", id="item-title", classes=badge_class)
+        badge = f"[{state}]"
+        yield Label(title, id="item-title")
+        yield Label(badge, id="item-badge", classes=badge_class)
 
 
 class ReplyModalScreen(ModalScreen[Optional[str]]):

@@ -163,20 +163,36 @@ def check_jules_api_queries():
             # Stage 2: AGY Takeover Dispatch if UNSTUCK_PROMPT timed out (>3 mins / 180s) without subsequent progress
             has_subsequent_progress = last_act_epoch > last_unstuck_epoch
             if last_unstuck_epoch > 0 and not has_subsequent_progress and (now - last_unstuck_epoch > 180):
-                print(f"🤖 [Jules Listener] Stage 1 un-stick attempt timed out for session {session_id} ({int(now - last_unstuck_epoch)}s). Executing Stage 2 AGY takeover...")
-                from jules_manager import log_action, archive_session
-                repo_dir = os.path.join(PROJECTS_DIR, rep_name) if rep_name else PROJECTS_DIR
-                if os.path.exists(repo_dir):
-                    log_action(session_id, "AGY_DISPATCH", f"Dispatched stuck session {session_id} to AGY worker", title=clean_t, repo=rep_name, branch=br_name, action_by="auto")
-                    subprocess.run(["git", "fetch", "origin"], cwd=repo_dir, capture_output=True)
-                    subprocess.run(["git", "checkout", "main"], cwd=repo_dir, capture_output=True)
-                    subprocess.run(["git", "pull", "origin", "main"], cwd=repo_dir, capture_output=True)
-                    reb_res = subprocess.run(["git", "merge", "--ff-only", f"origin/{br_name}"], cwd=repo_dir, capture_output=True)
-                    if reb_res.returncode == 0:
-                        subprocess.run(["git", "push", "origin", "main"], cwd=repo_dir, capture_output=True)
-                    archive_session(session_id, action_by="auto", title=clean_t, repo=rep_name, branch=br_name)
-                    print(f"🚀 [Jules Listener] AGY successfully finalized and archived stuck session {session_id}")
-                    continue
+                # Check if AGY_DISPATCH was already executed for this unstuck attempt
+                has_agy_dispatched = False
+                for ev in reversed(sess_events):
+                    if ev.get("action") == "AGY_DISPATCH":
+                        ev_time = ev.get("timestamp_epoch", 0)
+                        if not ev_time and ev.get("timestamp"):
+                            try:
+                                dt = datetime.datetime.strptime(ev["timestamp"], "%Y-%m-%d %H:%M:%S")
+                                ev_time = dt.timestamp()
+                            except Exception:
+                                pass
+                        if ev_time >= last_unstuck_epoch:
+                            has_agy_dispatched = True
+                            break
+
+                if not has_agy_dispatched:
+                    print(f"🤖 [Jules Listener] Stage 1 un-stick attempt timed out for session {session_id} ({int(now - last_unstuck_epoch)}s). Executing Stage 2 AGY takeover...")
+                    from jules_manager import log_action, archive_session
+                    repo_dir = os.path.join(PROJECTS_DIR, rep_name) if rep_name else PROJECTS_DIR
+                    if os.path.exists(repo_dir):
+                        log_action(session_id, "AGY_DISPATCH", f"Dispatched stuck session {session_id} to AGY worker", title=clean_t, repo=rep_name, branch=br_name, action_by="auto")
+                        subprocess.run(["git", "fetch", "origin"], cwd=repo_dir, capture_output=True)
+                        subprocess.run(["git", "checkout", "main"], cwd=repo_dir, capture_output=True)
+                        subprocess.run(["git", "pull", "origin", "main"], cwd=repo_dir, capture_output=True)
+                        reb_res = subprocess.run(["git", "merge", "--ff-only", f"origin/{br_name}"], cwd=repo_dir, capture_output=True)
+                        if reb_res.returncode == 0:
+                            subprocess.run(["git", "push", "origin", "main"], cwd=repo_dir, capture_output=True)
+                        archive_session(session_id, action_by="auto", title=clean_t, repo=rep_name, branch=br_name)
+                        print(f"🚀 [Jules Listener] AGY successfully finalized and archived stuck session {session_id}")
+                        continue
 
         if state in ("AWAITING_INPUT", "USER_INPUT_REQUIRED", "PENDING_REVIEW", "AWAITING_USER_FEEDBACK", "PAUSED"):
             activities = get_session_activities(session_id)

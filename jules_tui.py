@@ -154,6 +154,7 @@ TRANSPARENT_THEME = Theme(
 
 # Import API manager functions
 from jules_manager import list_sessions, get_session_activities, send_message, archive_session, unarchive_session, _make_request
+from jules_scraper import fetch_jules_suggestions, dismiss_suggestion
 
 CONFIG_DIR = pathlib.Path.home() / ".config" / "jules-vanager"
 CONFIG_FILE = CONFIG_DIR / "config.json"
@@ -422,6 +423,10 @@ class SessionItem(ListItem):
         if is_answering:
             badge_text = f"{spinner_char} ANSWERING"
             badge_style = "bold #38bdf8"
+        elif state == "SUGGESTION":
+            badge_icon = "💡 "
+            badge_text = "SUGGESTION"
+            badge_style = "bold #eab308"
         elif state == "UNASSIGNED_PR":
             badge_icon = "🐙 "
             badge_text = "UNASSIGNED PR"
@@ -730,6 +735,7 @@ class JulesTUIApp(App):
     
     BINDINGS = [
         Binding("r", "refresh_sessions", "Refresh", show=True),
+        Binding("g", "toggle_suggestions", "Suggestions Panel", show=True),
         Binding("a", "archive_selected", "Archive", show=True),
         Binding("v", "toggle_archived", "Archived Panel", show=True),
         Binding("m", "cycle_filter", "Filter Mode", show=True),
@@ -936,8 +942,10 @@ class JulesTUIApp(App):
     def __init__(self) -> None:
         super().__init__()
         self.sessions: List[Dict[str, Any]] = load_cached_sessions()
+        self.suggestions: List[Dict[str, Any]] = []
         self.filter_mode: str = "ALL"  # ALL, ACTIVE, AWAITING, COMPLETED, ARCHIVED
         self.show_archived: bool = False
+        self.show_suggestions: bool = False
         self.status_msg: str = "Ready"
         self.spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
         self.spinner_idx = 0
@@ -983,7 +991,9 @@ class JulesTUIApp(App):
             else:
                 listener_str = "○ Listener: STOPPED"
 
-            if self.show_archived:
+            if self.show_suggestions:
+                panel_str = "💡 VIEW: PANEL SUGGESTIONS"
+            elif self.show_archived:
                 panel_str = "📂 VIEW: ARCHIVED SESSIONS PANEL"
             else:
                 panel_str = f"📋 VIEW: ACTIVE SESSIONS ({self.filter_mode})"
@@ -1025,16 +1035,33 @@ class JulesTUIApp(App):
             list_view.clear()
 
             filtered = []
-            for s in self.sessions:
-                sid = s.get("id") or s.get("name", "").split("/")[-1]
-                is_answering = sid in getattr(self, "answering_sessions", {})
-                st = s.get("state", "").upper()
-                is_archived = st in ("ARCHIVED", "CLOSED") or s.get("archived", False)
-                
-                if self.show_archived:
+            if self.show_suggestions:
+                for s in getattr(self, "suggestions", []):
+                    title = s.get("title", "")
+                    details = s.get("details", "")
+                    repo = s.get("repo", "Vikyek/paru-wrapper")
+                    filtered.append({
+                        "id": f"sug-{hash(title)}",
+                        "title": title,
+                        "prompt": details,
+                        "state": "SUGGESTION",
+                        "is_suggestion": True,
+                        "repo": repo,
+                        "details": details,
+                        "source": s.get("source", "scraped")
+                    })
+            elif self.show_archived:
+                for s in self.sessions:
+                    st = s.get("state", "").upper()
+                    is_archived = st in ("ARCHIVED", "CLOSED") or s.get("archived", False)
                     if is_archived:
                         filtered.append(s)
-                else:
+            else:
+                for s in self.sessions:
+                    sid = s.get("id") or s.get("name", "").split("/")[-1]
+                    is_answering = sid in getattr(self, "answering_sessions", {})
+                    st = s.get("state", "").upper()
+                    is_archived = st in ("ARCHIVED", "CLOSED") or s.get("archived", False)
                     if is_archived:
                         continue
                     if self.filter_mode == "ACTIVE" and not (
@@ -1120,13 +1147,16 @@ class JulesTUIApp(App):
             unassigned = get_unassigned_jules_prs(all_sessions)
             all_sessions.extend(unassigned)
 
+            sugs = fetch_jules_suggestions()
+            self.suggestions = sugs
+
             if all_sessions:
                 save_cached_sessions(all_sessions)
                 self.sessions = all_sessions
                 self.call_from_thread(self.populate_session_list)
                 self.call_from_thread(
                     self.update_status,
-                    f"Fetched {len(active_sessions)} active, {len(archived_sessions)} archived sessions."
+                    f"Fetched {len(active_sessions)} active, {len(archived_sessions)} archived, {len(sugs)} suggestions."
                 )
         except Exception as e:
             self.call_from_thread(self.update_status, f"Fetch error: {e}")
@@ -1165,6 +1195,18 @@ class JulesTUIApp(App):
         title = s.get("title") or s.get("prompt") or f"Session {sid}"
         state = s.get("state", "UNKNOWN")
         init_prompt = s.get("prompt", "N/A")
+
+        if s.get("is_suggestion"):
+            details = s.get("details") or init_prompt
+            repo = s.get("repo", "Vikyek/paru-wrapper")
+            source = s.get("source", "scraped")
+            body_md = f"### 💡 Panel Suggestion\n- **Title:** {title}\n- **Repository:** `{repo}`\n- **Source:** `{source}`\n\n### 📝 Recommendation Details\n{details}\n\n👉 **Press `Enter` to spawn a new Jules session with this suggestion!**\n"
+            try:
+                content = self.query_one("#detail-content", Markdown)
+                content.update(body_md)
+            except Exception:
+                pass
+            return
 
         is_answering = sid in getattr(self, "answering_sessions", {})
         display_state = "ANSWERING" if is_answering else state
@@ -1226,11 +1268,33 @@ class JulesTUIApp(App):
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         if isinstance(event.item, SessionItem):
             s = event.item.session
-            if s.get("is_unassigned_pr") and s.get("url"):
+            if s.get("is_suggestion"):
+                title = s.get("title", "Suggestion Task")
+                repo = s.get("repo", "paru-wrapper")
+                prompt = s.get("details") or title
+                self.update_status(f"Starting Jules session for suggestion in {repo}...")
+                self.spawn_suggestion_worker(repo, prompt)
+            elif s.get("is_unassigned_pr") and s.get("url"):
                 webbrowser.open(s["url"])
                 self.update_status(f"Opened PR: {s['url']}")
             else:
                 self.action_inspect_reply()
+
+    @work(exclusive=True, thread=True)
+    def spawn_suggestion_worker(self, repo: str, prompt: str) -> None:
+        try:
+            from jules_manager import start_session_workflow
+            clean_repo = repo.replace("Vikyek/", "")
+            res = start_session_workflow(clean_repo, prompt)
+            if isinstance(res, dict) and "error" in res:
+                self.call_from_thread(self.update_status, f"Error starting session: {res.get('error')}")
+            else:
+                sid = res.get("id") or res.get("name", "").split("/")[-1]
+                self.call_from_thread(self.update_status, f"Spawned Jules session {sid} for suggestion!")
+                time.sleep(2)
+                self.fetch_data_worker()
+        except Exception as e:
+            self.call_from_thread(self.update_status, f"Error spawning suggestion session: {e}")
 
     def action_refresh_sessions(self) -> None:
         self.update_status("Refreshing sessions...")
@@ -1273,9 +1337,19 @@ class JulesTUIApp(App):
         except Exception:
             pass
 
-    def action_cycle_filter(self) -> None:
-        if self.show_archived:
+    def action_toggle_suggestions(self) -> None:
+        self.show_suggestions = not self.show_suggestions
+        if self.show_suggestions:
             self.show_archived = False
+        self.update_footer_bindings()
+        view_str = "Panel Suggestions" if self.show_suggestions else f"Active Sessions ({self.filter_mode})"
+        self.update_status(f"Switched view to {view_str}")
+        self.populate_session_list()
+
+    def action_cycle_filter(self) -> None:
+        if self.show_archived or self.show_suggestions:
+            self.show_archived = False
+            self.show_suggestions = False
             self.update_footer_bindings()
         modes = ["ALL", "ACTIVE", "AWAITING", "FAILED", "COMPLETED"]
         idx = (modes.index(self.filter_mode) + 1) % len(modes)
@@ -1285,6 +1359,8 @@ class JulesTUIApp(App):
 
     def action_toggle_archived(self) -> None:
         self.show_archived = not self.show_archived
+        if self.show_archived:
+            self.show_suggestions = False
         self.update_footer_bindings()
         view_str = "Archived Sessions" if self.show_archived else f"Active Sessions ({self.filter_mode})"
         self.update_status(f"Switched view to {view_str}")

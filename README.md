@@ -15,6 +15,7 @@ Standalone Google Jules API Manager, Listener Daemon, Reactive Textual TUI, and 
 - **Conky HUD Widget ([`jules_hud.py`](file:///home/v/Projects/jules-vanager/jules_hud.py))**: Lightweight ANSI/text HUD status component formatting session metrics (`~/.config/jules-vanager/status.json`) for terminal overlays or status bars (`vlfstatus`).
 - **Browser Cookie Extractor ([`jules_cookie_extractor.py`](file:///home/v/Projects/jules-vanager/jules_cookie_extractor.py))**: Automated extraction tool fetching Jules session cookies from Chrome, Brave, and Firefox SQLite databases.
 - **Google Jules Action Integration ([`google-labs-code/jules-action`](https://github.com/google-labs-code/jules-action))**: Integrated support for GitHub Actions workflows powering continuous background refactoring, dependency updates, and automated code quality tasks.
+- **Google Stitch Skills Integration ([`google-labs-code/stitch-skills`](https://github.com/google-labs-code/stitch-skills))**: Integrated UI/UX design generation, screen variants, and design system capabilities via Stitch MCP tools and agent skills.
 
 ---
 

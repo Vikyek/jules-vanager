@@ -679,23 +679,17 @@ class JulesTUIApp(App):
         try:
             target_desc = "Unarchive" if self.show_archived else "Archive"
             
-            # Update BINDINGS declaration array
-            for b in self.BINDINGS:
-                if getattr(b, "key", "") == "a" or getattr(b, "action", "") == "archive_selected":
-                    b.description = target_desc
-
-            # Update active screen bindings
-            if hasattr(self.screen, "_bindings") and hasattr(self.screen._bindings, "bindings"):
-                for binding in self.screen._bindings.bindings.values():
-                    if getattr(binding, "key", "") == "a" or getattr(binding, "action", "") == "archive_selected":
-                        binding.description = target_desc
-
-            # Directly update FooterKey child widget descriptions
-            from textual.widgets._footer import FooterKey
-            for fk in self.query(FooterKey):
-                if fk.action == "archive_selected" or fk.key == "a":
-                    fk.description = target_desc
-                    fk.refresh()
+            # Rebuild frozen Binding objects in _bindings.key_to_bindings for app and active screen
+            for container in (self, self.screen):
+                if hasattr(container, "_bindings") and hasattr(container._bindings, "key_to_bindings"):
+                    for key, binding_list in list(container._bindings.key_to_bindings.items()):
+                        new_list = []
+                        for b in binding_list:
+                            if getattr(b, "action", "") == "archive_selected" or getattr(b, "key", "") == "a":
+                                new_list.append(Binding(b.key, b.action, target_desc, show=b.show, key_display=b.key_display))
+                            else:
+                                new_list.append(b)
+                        container._bindings.key_to_bindings[key] = new_list
 
             self.screen.bindings_updated_signal.publish(self.screen)
         except Exception:

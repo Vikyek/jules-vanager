@@ -72,5 +72,26 @@ class TestJulesTUIApp(unittest.IsolatedAsyncioTestCase):
             # Verify return to main screen
             self.assertFalse(isinstance(app.screen, ReplyModalScreen))
 
+    async def test_answering_badge_and_state(self):
+        app = JulesTUIApp()
+        app.sessions = [
+            {"id": "test-sid-999", "state": "AWAITING_USER_FEEDBACK", "title": "Awaiting session"}
+        ]
+        async with app.run_test() as pilot:
+            app.populate_session_list()
+            await pilot.pause()
+
+            # Mark session as answering
+            app.mark_session_answering("test-sid-999")
+            self.assertIn("test-sid-999", app.answering_sessions)
+
+            # Trigger animation frame
+            app.animate_status_bar()
+            await pilot.pause()
+
+            # Clear answering status
+            app.clear_session_answering("test-sid-999")
+            self.assertNotIn("test-sid-999", app.answering_sessions)
+
 if __name__ == "__main__":
     unittest.main()

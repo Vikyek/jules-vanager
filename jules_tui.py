@@ -369,14 +369,27 @@ class SessionItem(ListItem):
         if archive_time and "T" in archive_time:
             archive_time = archive_time.replace("T", " ").split(".")[0][:16]
 
+        is_answering = False
+        spinner_char = "⠋"
+        if getattr(self.app, "answering_sessions", None) and self.sid in self.app.answering_sessions:
+            is_answering = True
+            if hasattr(self.app, "spinner_frames") and hasattr(self.app, "spinner_idx"):
+                spinner_char = self.app.spinner_frames[self.app.spinner_idx % len(self.app.spinner_frames)]
+        elif self.session.get("is_answering"):
+            is_answering = True
+
         from rich.text import Text
         txt = Text()
 
+        display_badge = f"[{spinner_char} ANSWERING]" if is_answering else f"[{state}]"
+
         if is_focused:
             time_suffix = f" ({archive_time})" if archive_time and (state in ("ARCHIVED", "CLOSED") or getattr(self.app, "show_archived", False)) else ""
-            txt.append(f"[{state}] {title}{time_suffix}", style="bold #000000 on #eab308")
+            txt.append(f"{display_badge} {title}{time_suffix}", style="bold #000000 on #eab308")
         else:
-            if state in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
+            if is_answering:
+                badge_style = "bold #38bdf8"
+            elif state in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
                 badge_style = "bold #22c55e"
             elif "FAIL" in state or "CONFLICT" in state or "REJECTED" in state:
                 badge_style = "bold #ef4444"
@@ -385,7 +398,7 @@ class SessionItem(ListItem):
             else:
                 badge_style = "#71717a"
 
-            txt.append(f"[{state}]", style=badge_style)
+            txt.append(display_badge, style=badge_style)
             txt.append(f" {title}", style="#eab308")
             if archive_time and (state in ("ARCHIVED", "CLOSED") or getattr(self.app, "show_archived", False)):
                 txt.append(f"  {archive_time}", style="#71717a")
@@ -804,6 +817,7 @@ class JulesTUIApp(App):
         self.spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
         self.spinner_idx = 0
         self.title_pulse = False
+        self.answering_sessions: Dict[str, float] = {}
 
     def compose(self) -> ComposeResult:
         with Vertical(id="header-container"):
@@ -826,13 +840,13 @@ class JulesTUIApp(App):
 
     def animate_status_bar(self) -> None:
         try:
+            self.spinner_idx = (self.spinner_idx + 1) % len(self.spinner_frames)
+            spinner = self.spinner_frames[self.spinner_idx]
             bar = self.query_one("#status-bar", Static)
             is_active_op = any(kw in self.status_msg.lower() for kw in ("fetching", "refreshing", "sending", "archiving", "syncing"))
             service_active = is_listener_service_active()
             
             if is_active_op:
-                spinner = self.spinner_frames[self.spinner_idx % len(self.spinner_frames)]
-                self.spinner_idx += 1
                 listener_str = f"⚡ Listener: RUNNING {spinner}"
             elif service_active:
                 listener_str = "● Listener: ACTIVE (systemd)"
@@ -845,6 +859,24 @@ class JulesTUIApp(App):
                 panel_str = f"📋 VIEW: ACTIVE SESSIONS ({self.filter_mode})"
 
             bar.update(f" {panel_str} | {listener_str} | {self.status_msg}")
+
+            if getattr(self, "answering_sessions", None):
+                now = time.time()
+                expired = [sid for sid, ts in self.answering_sessions.items() if (now - ts) > 180]
+                for sid in expired:
+                    del self.answering_sessions[sid]
+
+                list_view = self.query_one("#session-list", ListView)
+                for item in list_view.children:
+                    if isinstance(item, SessionItem) and item.sid in self.answering_sessions:
+                        item.update_rendering()
+
+                if list_view.highlighted_child and getattr(list_view.highlighted_child, "sid", None) in self.answering_sessions:
+                    cur_item = list_view.highlighted_child
+                    sid = cur_item.sid
+                    s = cur_item.session
+                    title = s.get("title") or s.get("prompt") or f"Session {sid}"
+                    self.query_one("#detail-header", Label).update(f"📌 {title}\nID: {sid} | State: ANSWERING {spinner}")
         except Exception:
             pass
 
@@ -858,6 +890,8 @@ class JulesTUIApp(App):
 
             filtered = []
             for s in self.sessions:
+                sid = s.get("id") or s.get("name", "").split("/")[-1]
+                is_answering = sid in getattr(self, "answering_sessions", {})
                 st = s.get("state", "").upper()
                 is_archived = st in ("ARCHIVED", "CLOSED") or s.get("archived", False)
                 
@@ -868,10 +902,10 @@ class JulesTUIApp(App):
                     if is_archived:
                         continue
                     if self.filter_mode == "ACTIVE" and not (
-                        "IN_PROGRESS" in st or "RUNNING" in st or "AWAITING" in st or "PAUSED" in st
+                        "IN_PROGRESS" in st or "RUNNING" in st or "AWAITING" in st or "PAUSED" in st or is_answering
                     ):
                         continue
-                    if self.filter_mode == "AWAITING" and "AWAITING" not in st:
+                    if self.filter_mode == "AWAITING" and not ("AWAITING" in st or is_answering):
                         continue
                     if self.filter_mode == "FAILED" and "FAIL" not in st and "ERROR" not in st:
                         continue
@@ -879,8 +913,11 @@ class JulesTUIApp(App):
                         continue
                     filtered.append(s)
 
-            # Priority order: Awaiting input/feedback > Running/In Progress > Failed/Errors > Others > Completed
+            # Priority order: Answering > Awaiting input/feedback > Running/In Progress > Failed/Errors > Others > Completed
             def state_priority(s: Dict[str, Any]) -> int:
+                sid = s.get("id") or s.get("name", "").split("/")[-1]
+                if sid in getattr(self, "answering_sessions", {}):
+                    return -1
                 st = (s.get("state") or "").upper()
                 if "AWAITING" in st or "PAUSED" in st:
                     return 0
@@ -925,6 +962,10 @@ class JulesTUIApp(App):
                 if sid and sid not in seen_ids:
                     seen_ids.add(sid)
                     all_sessions.append(s)
+                if sid in getattr(self, "answering_sessions", {}):
+                    st = (s.get("state") or "").upper()
+                    if "IN_PROGRESS" in st or "RUNNING" in st or "COMPLETED" in st or "FAIL" in st:
+                        self.answering_sessions.pop(sid, None)
 
             for s in archived_sessions:
                 sid = s.get("id") or s.get("name", "").split("/")[-1]
@@ -965,8 +1006,13 @@ class JulesTUIApp(App):
             if archive_time != "N/A" and "T" in archive_time:
                 archive_time = archive_time.replace("T", " ").split(".")[0][:19]
 
+            is_answering = sid in getattr(self, "answering_sessions", {})
             header = self.query_one("#detail-header", Label)
-            header.update(f"📌 {title}\nID: {sid} | State: {state}")
+            if is_answering:
+                spinner_char = self.spinner_frames[self.spinner_idx % len(self.spinner_frames)]
+                header.update(f"📌 {title}\nID: {sid} | State: ANSWERING {spinner_char}")
+            else:
+                header.update(f"📌 {title}\nID: {sid} | State: {state}")
 
             self.render_session_details(sid, s, archive_time)
             self.fetch_session_activities_worker(sid, s, archive_time)
@@ -976,12 +1022,19 @@ class JulesTUIApp(App):
         state = s.get("state", "UNKNOWN")
         init_prompt = s.get("prompt", "N/A")
 
+        is_answering = sid in getattr(self, "answering_sessions", {})
+        display_state = "ANSWERING" if is_answering else state
+
         act_info = _SESSION_ACTIVITIES_CACHE.get(sid, {})
         question = act_info.get("question")
         failure_reason = act_info.get("failure_reason")
         act_count = act_info.get("total_activities")
 
-        body_md = f"### Session Overview\n- **ID:** `{sid}`\n- **State:** `{state}`\n- **Updated:** `{archive_time}`\n"
+        body_md = f"### Session Overview\n- **ID:** `{sid}`\n- **State:** `{display_state}`\n- **Updated:** `{archive_time}`\n"
+
+        if is_answering:
+            spinner = self.spinner_frames[self.spinner_idx % len(self.spinner_frames)]
+            body_md += f"\n> ⏳ **Reply submitted to Jules! Awaiting response...** {spinner}\n"
 
         if question:
             body_md += f"\n### ❓ Jules' Feedback Request / Question\n> {question}\n\n👉 **Press `Enter` to reply directly to Jules**\n"
@@ -1093,18 +1146,74 @@ class JulesTUIApp(App):
             def handle_reply(reply_text: Optional[str]) -> None:
                 if reply_text:
                     self.update_status(f"Sending reply to session {sid}...")
+                    self.mark_session_answering(sid)
                     self.send_reply_worker(sid, reply_text)
 
             self.push_screen(ReplyModalScreen(sid, prompt, question=question), handle_reply)
+
+    def mark_session_answering(self, sid: str) -> None:
+        if not hasattr(self, "answering_sessions"):
+            self.answering_sessions = {}
+        self.answering_sessions[sid] = time.time()
+        for s in self.sessions:
+            s_id = s.get("id") or s.get("name", "").split("/")[-1]
+            if s_id == sid:
+                s["is_answering"] = True
+                break
+        try:
+            list_view = self.query_one("#session-list", ListView)
+            for item in list_view.children:
+                if isinstance(item, SessionItem) and item.sid == sid:
+                    item.update_rendering()
+            if list_view.highlighted_child and getattr(list_view.highlighted_child, "sid", None) == sid:
+                cur_item = list_view.highlighted_child
+                s = cur_item.session
+                archive_time = s.get("archived_at") or s.get("updateTime") or s.get("createTime") or "N/A"
+                if "T" in archive_time:
+                    archive_time = archive_time.replace("T", " ").split(".")[0]
+                spinner = self.spinner_frames[self.spinner_idx % len(self.spinner_frames)]
+                title = s.get("title") or s.get("prompt") or f"Session {sid}"
+                self.query_one("#detail-header", Label).update(f"📌 {title}\nID: {sid} | State: ANSWERING {spinner}")
+                self.render_session_details(sid, s, archive_time)
+        except Exception:
+            pass
+
+    def clear_session_answering(self, sid: str) -> None:
+        if hasattr(self, "answering_sessions") and sid in self.answering_sessions:
+            del self.answering_sessions[sid]
+        for s in self.sessions:
+            s_id = s.get("id") or s.get("name", "").split("/")[-1]
+            if s_id == sid:
+                s.pop("is_answering", None)
+                break
+        try:
+            list_view = self.query_one("#session-list", ListView)
+            for item in list_view.children:
+                if isinstance(item, SessionItem) and item.sid == sid:
+                    item.update_rendering()
+            if list_view.highlighted_child and getattr(list_view.highlighted_child, "sid", None) == sid:
+                cur_item = list_view.highlighted_child
+                s = cur_item.session
+                archive_time = s.get("archived_at") or s.get("updateTime") or s.get("createTime") or "N/A"
+                if "T" in archive_time:
+                    archive_time = archive_time.replace("T", " ").split(".")[0]
+                state = s.get("state", "UNKNOWN")
+                title = s.get("title") or s.get("prompt") or f"Session {sid}"
+                self.query_one("#detail-header", Label).update(f"📌 {title}\nID: {sid} | State: {state}")
+                self.render_session_details(sid, s, archive_time)
+        except Exception:
+            pass
 
     @work(exclusive=True, thread=True)
     def send_reply_worker(self, sid: str, reply_text: str) -> None:
         try:
             res = send_message(sid, reply_text)
             self.call_from_thread(self.update_status, f"Reply sent to {sid}.")
+            time.sleep(2)
             self.fetch_data_worker()
         except Exception as e:
             self.call_from_thread(self.update_status, f"Error sending reply: {e}")
+            self.call_from_thread(self.clear_session_answering, sid)
 
     def action_archive_selected(self) -> None:
         list_view = self.query_one("#session-list", ListView)

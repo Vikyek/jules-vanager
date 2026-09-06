@@ -431,16 +431,16 @@ class JulesTUIApp(App):
         return True, label
 
     CSS = """
-    $surface: transparent;
-    $background: transparent;
-    $panel: transparent;
+    $surface: #000000;
+    $background: #000000;
+    $panel: #000000;
 
     * {
-        background: transparent !important;
+        background: #000000 !important;
     }
 
     Screen, ModalScreen, App {
-        background: transparent !important;
+        background: #000000 !important;
         color: #eab308;
     }
 
@@ -448,7 +448,7 @@ class JulesTUIApp(App):
         dock: top;
         height: auto;
         width: 100%;
-        background: transparent !important;
+        background: #000000 !important;
     }
 
     #top-header {
@@ -463,19 +463,19 @@ class JulesTUIApp(App):
     Footer {
         dock: bottom;
         height: 1;
-        background: transparent !important;
+        background: #000000 !important;
         color: #eab308;
     }
 
     FooterKey, FooterLabel, FooterKey .footer-key--key, FooterKey .footer-key--description {
-        background: transparent !important;
+        background: #000000 !important;
     }
 
     #status-bar {
         height: auto;
         min-height: 1;
         width: 100%;
-        background: transparent !important;
+        background: #000000 !important;
         color: #facc15;
         text-style: bold;
         text-align: center;
@@ -486,36 +486,36 @@ class JulesTUIApp(App):
         width: 45%;
         border-right: solid #eab308;
         height: 100%;
-        background: transparent !important;
+        background: #000000 !important;
     }
 
     #right-pane {
         width: 55%;
         height: 100%;
         padding: 1 2;
-        background: transparent !important;
+        background: #000000 !important;
         color: #06b6d4;
     }
 
     Container, ScrollableContainer, ListView, ListItem, Static, Markdown, MarkdownBlock, MarkdownHeader, MarkdownParagraph, MarkdownUnorderedList, MarkdownOrderedList, MarkdownListItem, MarkdownFence, MarkdownCodeBlock, MarkdownTable, MarkdownTableCell, MarkdownTableTitle, Label, Input, Button {
-        background: transparent !important;
+        background: #000000 !important;
     }
 
     ListView, ListView:focus, ListView > ListItem, ListView > ListItem:enabled, ListView > ListItem:hover {
-        background: transparent !important;
+        background: #000000 !important;
     }
 
     ListItem, ListItem:enabled, ListItem:hover {
         padding: 0 1;
         height: auto;
         color: #eab308;
-        background: transparent !important;
+        background: #000000 !important;
         border-bottom: none;
     }
 
     #item-static {
         width: 100%;
-        background: transparent !important;
+        background: #000000 !important;
     }
 
     ListItem:focus, ListItem.--highlight, ListView > ListItem:focus, ListView > ListItem.--highlight {

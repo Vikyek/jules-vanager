@@ -459,8 +459,9 @@ class JulesTUIApp(App):
     #status-bar {
         height: 1;
         width: 100%;
-        background: #000000;
+        background: #18181b;
         color: #facc15;
+        text-style: bold;
         text-align: center;
         border-bottom: solid #eab308;
     }

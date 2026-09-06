@@ -622,13 +622,8 @@ class JulesTUIApp(App):
         list_view = self.query_one("#session-list", ListView)
         if isinstance(list_view.highlighted_child, SessionItem):
             sid = list_view.highlighted_child.sid
-
-            def handle_confirm(confirmed: bool) -> None:
-                if confirmed:
-                    self.update_status(f"Archiving session {sid}...")
-                    self.archive_worker(sid)
-
-            self.push_screen(ConfirmModalScreen("⚠️ Archive Session", f"Are you sure you want to archive session [{sid}]?"), handle_confirm)
+            self.update_status(f"Archiving session {sid}...")
+            self.archive_worker(sid)
 
     @work(exclusive=True, thread=True)
     def archive_worker(self, sid: str) -> None:

@@ -682,8 +682,8 @@ class JulesTUIApp(App):
                         if getattr(binding, "key", "") == "a":
                             binding.description = target_desc
 
-            self.screen.refresh_bindings()
-            self.refresh_bindings()
+            footer = self.query_one(Footer)
+            footer.recompose()
         except Exception:
             pass
 

@@ -1041,6 +1041,16 @@ def toggle_systemd_service():
         res = subprocess.run(["systemctl", "--user", "start", "jules-listener.service"], capture_output=True, text=True)
         return "🚀 Started background Jules listener service."
 
+def toggle_systemd_autostart():
+    check = subprocess.run(["systemctl", "--user", "is-enabled", "jules-listener.service"], capture_output=True, text=True)
+    is_enabled = "enabled" in check.stdout.strip()
+    if is_enabled:
+        res = subprocess.run(["systemctl", "--user", "disable", "jules-listener.service"], capture_output=True, text=True)
+        return "⚙️ Disabled system autostart for Jules listener."
+    else:
+        res = subprocess.run(["systemctl", "--user", "enable", "jules-listener.service"], capture_output=True, text=True)
+        return "⚙️ Enabled system autostart for Jules listener."
+
 def prompt_confirm(stdscr, question):
     """Displays a full-screen confirmation modal prompt returning True if user presses 'y'/'Y'."""
     stdscr.timeout(-1)

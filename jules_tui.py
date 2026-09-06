@@ -499,13 +499,11 @@ class JulesTUIApp(App):
         background: transparent !important;
     }
 
-    ListView {
-        height: 100%;
+    ListView, ListView:focus, ListView > ListItem, ListView > ListItem:enabled, ListView > ListItem:hover {
         background: transparent !important;
-        border: none;
     }
 
-    ListItem {
+    ListItem, ListItem:enabled, ListItem:hover {
         padding: 0 1;
         height: auto;
         color: #eab308;
@@ -518,14 +516,18 @@ class JulesTUIApp(App):
         background: transparent !important;
     }
 
-    ListItem:focus, ListItem.--highlight {
+    ListItem:focus, ListItem.--highlight, ListView > ListItem:focus, ListView > ListItem.--highlight {
         background: #eab308 !important;
         color: #000000 !important;
     }
 
-    ListItem:focus Static, ListItem.--highlight Static {
+    ListItem:focus Static, ListItem.--highlight Static, ListView > ListItem:focus Static, ListView > ListItem.--highlight Static {
         background: #eab308 !important;
         color: #000000 !important;
+    }
+
+    Markdown, MarkdownBlock, MarkdownHeader, MarkdownParagraph, MarkdownUnorderedList, MarkdownOrderedList, MarkdownListItem, MarkdownFence, MarkdownCodeBlock, MarkdownTable, MarkdownTableCell, MarkdownTableTitle {
+        background: transparent !important;
     }
 
     .state-success {
@@ -551,11 +553,13 @@ class JulesTUIApp(App):
         text-style: bold;
         color: #eab308;
         margin-bottom: 1;
+        background: transparent !important;
     }
 
     #detail-content {
         height: 100%;
         color: #38bdf8;
+        background: transparent !important;
     }
     """
 

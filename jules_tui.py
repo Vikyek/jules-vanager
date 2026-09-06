@@ -220,8 +220,9 @@ class SessionItem(ListItem):
         else:
             badge_class = "state-neutral"
 
-        yield Label(badge, classes=f"item-badge {badge_class}")
-        yield Label(f" {title}", classes="item-title")
+        with Horizontal(classes="item-layout"):
+            yield Label(badge, classes=f"item-badge {badge_class}")
+            yield Label(f" {title}", classes="item-title")
 
 
 class ReplyModalScreen(ModalScreen[Optional[str]]):
@@ -424,7 +425,6 @@ class JulesTUIApp(App):
     }
 
     ListItem {
-        layout: horizontal;
         padding: 0 1;
         height: auto;
         color: #eab308;
@@ -432,16 +432,23 @@ class JulesTUIApp(App):
         border-bottom: dashed #334155;
     }
 
+    .item-layout {
+        height: auto;
+        layout: horizontal;
+    }
+
     ListItem:focus, ListItem.--highlight {
-        background: #eab308;
-        color: #000000;
+        background: #1f2937;
+    }
+
+    ListItem:focus .item-title, ListItem.--highlight .item-title {
+        color: #facc15;
         text-style: bold;
     }
 
-    ListItem:focus .item-badge, ListItem.--highlight .item-badge {
-        color: #000000;
-        background: #eab308;
-        text-style: bold;
+    .item-badge {
+        width: auto;
+        margin-right: 1;
     }
 
     .item-title {

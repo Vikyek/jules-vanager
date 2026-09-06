@@ -435,22 +435,17 @@ class JulesTUIApp(App):
     }
 
     Header {
+        dock: top;
+        height: 1;
         background: #eab308;
         color: #000000;
     }
 
     Footer {
+        dock: bottom;
+        height: 1;
         background: #000000;
         color: #eab308;
-    }
-
-    #top-title-bar {
-        dock: top;
-        height: 1;
-        background: #eab308;
-        color: #000000;
-        text-align: center;
-        text-style: bold;
     }
 
     #status-bar {

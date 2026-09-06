@@ -494,6 +494,9 @@ class JulesTUIApp(App):
         self.sessions: List[Dict[str, Any]] = load_cached_sessions()
         self.filter_mode: str = "ALL"  # ALL, ACTIVE, AWAITING, COMPLETED
         self.status_msg: str = "Ready"
+        self.spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        self.spinner_idx = 0
+        self.title_pulse = False
 
     def compose(self) -> ComposeResult:
         yield Static(" 󱚝 GOOGLE JULES API VANAGER & LISTENER TUI ", id="top-title-bar")
@@ -509,14 +512,19 @@ class JulesTUIApp(App):
     def on_mount(self) -> None:
         self.populate_session_list()
         self.fetch_data_worker()
+        self.set_interval(0.1, self.animate_status_bar)
+
+    def animate_status_bar(self) -> None:
+        try:
+            bar = self.query_one("#status-bar", Static)
+            spinner = self.spinner_frames[self.spinner_idx % len(self.spinner_frames)]
+            self.spinner_idx += 1
+            bar.update(f" {spinner} Mode: [{self.filter_mode}] | {self.status_msg}")
+        except Exception:
+            pass
 
     def update_status(self, msg: str) -> None:
         self.status_msg = msg
-        try:
-            bar = self.query_one("#status-bar", Static)
-            bar.update(f" Mode: [{self.filter_mode}] | {msg}")
-        except Exception:
-            pass
 
     def populate_session_list(self) -> None:
         try:

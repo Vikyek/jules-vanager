@@ -1114,6 +1114,9 @@ class JulesTUIApp(App):
                         continue
                     filtered.append(s)
 
+                for agy_s in getattr(self, "agy_stolen_sessions", {}).values():
+                    filtered.append(agy_s)
+
             # Priority order: Answering > Awaiting input/feedback > Running/In Progress > Failed/Errors > Others > Completed
             def state_priority(s: Dict[str, Any]) -> int:
                 sid = s.get("id") or s.get("name", "").split("/")[-1]
@@ -1601,15 +1604,38 @@ class JulesTUIApp(App):
             if not os.path.exists(target_dir):
                 target_dir = os.path.expanduser("~/Projects")
 
+            stolen_id = f"agy-{hash(title)}"
+            if not hasattr(self, "agy_stolen_sessions"):
+                self.agy_stolen_sessions = {}
+
+            self.agy_stolen_sessions[stolen_id] = {
+                "id": stolen_id,
+                "title": f"⚡ AGY Steal: {title}",
+                "prompt": prompt,
+                "state": "RUNNING (AGY)",
+                "is_agy_stolen": True,
+                "repo": repo,
+                "details": f"Stolen suggestion executing directly in {clean_repo} via AGY subagent.\n\nTask:\n{prompt}",
+                "source": "agy_stealer",
+                "createTime": time.strftime("%Y-%m-%dT%H:%M:%SZ")
+            }
+
             cmd = ["agy", "-p", f"Task stole from Jules suggestion: {prompt}"]
             self.call_from_thread(self.update_status, f"Launching AGY CLI worker in {clean_repo}...")
+            self.call_from_thread(self.populate_session_list)
+
             res = subprocess.run(cmd, cwd=target_dir, capture_output=True, text=True, timeout=120)
             
             if res.returncode == 0:
+                if stolen_id in self.agy_stolen_sessions:
+                    self.agy_stolen_sessions[stolen_id]["state"] = "COMPLETED (AGY)"
                 self.call_from_thread(self.update_status, f"AGY successfully executed suggestion: {title[:40]}...")
             else:
                 err_text = res.stderr.strip()[:100] or res.stdout.strip()[:100] or "Unknown exit code"
+                if stolen_id in self.agy_stolen_sessions:
+                    self.agy_stolen_sessions[stolen_id]["state"] = f"FAILED (AGY): {err_text[:30]}"
                 self.call_from_thread(self.update_status, f"AGY worker exited with error: {err_text}")
+            self.call_from_thread(self.populate_session_list)
         except Exception as e:
             self.call_from_thread(self.update_status, f"Error in AGY worker: {e}")
 

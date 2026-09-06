@@ -491,7 +491,7 @@ class JulesTUIApp(App):
         color: #06b6d4;
     }
 
-    Container, ScrollableContainer, ListView, ListItem, Static, Markdown, MarkdownBlock, Label {
+    Container, ScrollableContainer, ListView, ListItem, Static, Markdown, MarkdownBlock, MarkdownHeader, MarkdownParagraph, MarkdownUnorderedList, MarkdownOrderedList, MarkdownListItem, MarkdownFence, MarkdownCodeBlock, Label {
         background: transparent;
     }
 

@@ -838,29 +838,35 @@ class JulesTUIApp(App):
                 else:
                     if is_archived:
                         continue
-                    if self.filter_mode == "ACTIVE" and st not in ("IN_PROGRESS", "RUNNING", "AWAITING_INPUT"):
+                    if self.filter_mode == "ACTIVE" and not (
+                        "IN_PROGRESS" in st or "RUNNING" in st or "AWAITING" in st or "PAUSED" in st
+                    ):
                         continue
                     if self.filter_mode == "AWAITING" and "AWAITING" not in st:
+                        continue
+                    if self.filter_mode == "FAILED" and "FAIL" not in st and "ERROR" not in st:
                         continue
                     if self.filter_mode == "COMPLETED" and st not in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
                         continue
                     filtered.append(s)
 
-            # Priority order: Awaiting input/feedback > Running/In Progress > Others
+            # Priority order: Awaiting input/feedback > Running/In Progress > Failed/Errors > Others > Completed
             def state_priority(s: Dict[str, Any]) -> int:
                 st = (s.get("state") or "").upper()
                 if "AWAITING" in st or "PAUSED" in st:
                     return 0
                 if "IN_PROGRESS" in st or "RUNNING" in st:
                     return 1
+                if "FAIL" in st or "ERROR" in st or "CONFLICT" in st:
+                    return 2
                 if st in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
-                    return 3
-                return 2
+                    return 4
+                return 3
 
             filtered.sort(key=state_priority)
 
             if not filtered:
-                msg = "No archived sessions found." if self.show_archived else "No sessions found for current filter mode."
+                msg = "No archived sessions found." if self.show_archived else f"No sessions found for filter [{self.filter_mode}]."
                 list_view.mount(ListItem(Label(msg, classes="state-neutral")))
                 return
 
@@ -873,17 +879,41 @@ class JulesTUIApp(App):
     def fetch_data_worker(self) -> None:
         """Background worker thread fetching sessions without UI blocking."""
         try:
-            res = list_sessions(include_archived=True)
-            raw_sessions = res.get("sessions", []) if isinstance(res, dict) else []
-            
-            unassigned = get_unassigned_jules_prs(raw_sessions)
-            raw_sessions.extend(unassigned)
-            
-            if raw_sessions:
-                save_cached_sessions(raw_sessions)
-                self.sessions = raw_sessions
+            active_res = list_sessions(include_archived=False)
+            active_sessions = active_res.get("sessions", []) if isinstance(active_res, dict) else []
+            for s in active_sessions:
+                s["archived"] = False
+
+            archived_res = list_sessions(include_archived=True)
+            archived_sessions = archived_res.get("sessions", []) if isinstance(archived_res, dict) else []
+            for s in archived_sessions:
+                s["archived"] = True
+
+            all_sessions = []
+            seen_ids = set()
+            for s in active_sessions:
+                sid = s.get("id") or s.get("name", "").split("/")[-1]
+                if sid and sid not in seen_ids:
+                    seen_ids.add(sid)
+                    all_sessions.append(s)
+
+            for s in archived_sessions:
+                sid = s.get("id") or s.get("name", "").split("/")[-1]
+                if sid and sid not in seen_ids:
+                    seen_ids.add(sid)
+                    all_sessions.append(s)
+
+            unassigned = get_unassigned_jules_prs(all_sessions)
+            all_sessions.extend(unassigned)
+
+            if all_sessions:
+                save_cached_sessions(all_sessions)
+                self.sessions = all_sessions
                 self.call_from_thread(self.populate_session_list)
-                self.call_from_thread(self.update_status, f"Fetched {len(raw_sessions)} total sessions.")
+                self.call_from_thread(
+                    self.update_status,
+                    f"Fetched {len(active_sessions)} active, {len(archived_sessions)} archived sessions."
+                )
         except Exception as e:
             self.call_from_thread(self.update_status, f"Fetch error: {e}")
 
@@ -950,7 +980,7 @@ class JulesTUIApp(App):
         if self.show_archived:
             self.show_archived = False
             self.update_footer_bindings()
-        modes = ["ALL", "ACTIVE", "AWAITING", "COMPLETED"]
+        modes = ["ALL", "ACTIVE", "AWAITING", "FAILED", "COMPLETED"]
         idx = (modes.index(self.filter_mode) + 1) % len(modes)
         self.filter_mode = modes[idx]
         self.update_status(f"Filter mode set to {self.filter_mode}")

@@ -27,6 +27,9 @@ class TestJulesTUIApp(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(app.filter_mode, "AWAITING")
 
             await pilot.press("m")
+            self.assertEqual(app.filter_mode, "FAILED")
+
+            await pilot.press("m")
             self.assertEqual(app.filter_mode, "COMPLETED")
 
             await pilot.press("m")

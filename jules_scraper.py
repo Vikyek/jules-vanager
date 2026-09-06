@@ -141,34 +141,35 @@ def fetch_sourcery_pr_suggestions():
         except Exception:
             pass
 
-    # Fallback to local git repository commit history for code health refactor logs if API is rate limited or timed out
-    if not suggestions:
-        seen_details = set()
-        for clean_repo in ["paru-wrapper", "jules-vanager"]:
-            repo_dir = os.path.expanduser(f"~/Projects/{clean_repo}")
-            if os.path.exists(os.path.join(repo_dir, ".git")):
-                try:
-                    g_res = subprocess.run(["git", "log", "-n", "50", "--oneline"], cwd=repo_dir, capture_output=True, text=True, timeout=2)
-                    if g_res.returncode == 0:
-                        for line in g_res.stdout.splitlines():
-                            if any(k in line.lower() for k in ["refactor", "health", "exception", "security", "perf"]) and "merge pull request" not in line.lower() and "merge branch" not in line.lower():
-                                parts = line.strip().split(" ", 1)
-                                if len(parts) == 2:
-                                    c_hash, c_msg = parts
-                                    norm_msg = c_msg.strip().lower()
-                                    if norm_msg not in seen_details:
-                                        seen_details.add(norm_msg)
-                                        stitle = f"Code Health ({c_hash}): {c_msg[:60]}"
-                                        if stitle not in seen_titles:
-                                            seen_titles.add(stitle)
-                                            suggestions.append({
-                                                "title": stitle,
-                                                "details": f"Code health recommendation: {c_msg}",
-                                                "repo": f"Vikyek/{clean_repo}",
-                                                "source": "git_commit_log"
-                                            })
-                except Exception:
-                    pass
+    # Dynamically generate fresh code analysis suggestions from local repos
+    local_dynamic = []
+    for clean_repo in ["paru-wrapper", "jules-vanager"]:
+        repo_dir = os.path.expanduser(f"~/Projects/{clean_repo}")
+        if os.path.exists(os.path.join(repo_dir, ".git")):
+            try:
+                g_res = subprocess.run(["git", "log", "-n", "30", "--oneline"], cwd=repo_dir, capture_output=True, text=True, timeout=2)
+                if g_res.returncode == 0:
+                    lines = g_res.stdout.splitlines()
+                    for idx, line in enumerate(lines[:15]):
+                        parts = line.strip().split(" ", 1)
+                        if len(parts) == 2:
+                            c_hash, c_msg = parts
+                            norm_msg = c_msg.strip().lower()
+                            if "merge pull request" in norm_msg or "merge branch" in norm_msg:
+                                continue
+                            stitle = f"Audit {clean_repo} ({c_hash}): {c_msg[:50]}"
+                            if stitle not in seen_titles:
+                                seen_titles.add(stitle)
+                                local_dynamic.append({
+                                    "title": stitle,
+                                    "details": f"Review recent commit changes for {clean_repo} ({c_hash}): {c_msg}. Verify edge cases and add regression test.",
+                                    "repo": f"Vikyek/{clean_repo}",
+                                    "source": "git_commit_log"
+                                })
+            except Exception:
+                pass
+    if local_dynamic:
+        suggestions.extend(local_dynamic)
 
     return suggestions
 
@@ -334,6 +335,8 @@ def fetch_jules_suggestions(raw_html_snippet=None, filter_dismissed=True):
     final_suggestions = [
         s for s in deduped_suggestions
         if not any(p in (s.get("title", "") + " " + s.get("details", "")).lower() for p in feedback_phrases)
+        and "merge pull request" not in (s.get("title", "") + " " + s.get("details", "")).lower()
+        and "merge branch" not in (s.get("title", "") + " " + s.get("details", "")).lower()
     ]
 
     # Save cleaned, deduplicated list back to disk

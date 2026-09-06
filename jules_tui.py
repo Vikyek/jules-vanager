@@ -668,24 +668,17 @@ class JulesTUIApp(App):
 
 
 def main() -> None:
-    # Auto-kill prior jules_tui instances and their parent kitty windows silently
+    # Auto-kill prior jules_tui python processes safely without killing current process or i3 window
     current_pid = os.getpid()
     try:
-        kill_script = f"""
-        for pid in $(pgrep -f "jules_tui"); do
-            if [ "$pid" != "{current_pid}" ] && [ "$pid" != $$ ]; then
-                ppid=$(ps -o ppid= -p "$pid" | grep -o '[0-9]*')
-                if [ -n "$ppid" ]; then
-                    pname=$(ps -o comm= -p "$ppid" | tr -d ' ')
-                    if [ "$pname" = "kitty" ]; then
-                        kill -9 "$ppid" 2>/dev/null
-                    fi
-                fi
-                kill -9 "$pid" 2>/dev/null
-            fi
-        done
-        """
-        subprocess.run(kill_script, shell=True, executable="/bin/bash")
+        out = subprocess.check_output(["pgrep", "-f", "python3.*jules_tui.py"], text=True)
+        for line in out.strip().splitlines():
+            try:
+                pid = int(line.strip())
+                if pid != current_pid:
+                    os.kill(pid, signal.SIGKILL)
+            except Exception:
+                pass
     except Exception:
         pass
 

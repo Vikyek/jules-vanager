@@ -9,10 +9,32 @@ Standalone Google Jules API Manager, Listener Daemon, Reactive Textual TUI, and 
 ## 🚀 Key Components
 
 - **Jules API Manager ([`jules_manager.py`](file:///home/v/Projects/jules-vanager/jules_manager.py))**: Command-line wrapper for session creation, source exploration, activity trajectory inspection, and message dispatch.
+- **Session Workflow Tool ([`jules_start.py`](file:///home/v/Projects/jules-vanager/jules_start.py))**: CLI launcher (`jules-start`) automatically resolving local directories, git remotes, and branches to start Jules sessions with prompts.
 - **Listener Daemon ([`jules_listener.py`](file:///home/v/Projects/jules-vanager/jules_listener.py))**: Background service (`jules-listener.service`) continuously monitoring active sessions, running test/syntax checks, auto-merging approved PRs, deleting merged branches, and archiving completed sessions.
 - **Reactive Textual TUI ([`jules_tui.py`](file:///home/v/Projects/jules-vanager/jules_tui.py))**: Modern, reactive terminal UI built with [Textual](https://textual.textualize.io/) (`textual.app.App`, `@work` background thread workers, `ListView`, `Markdown` inspector, and `ModalScreen` prompt reply dialogs).
 - **Conky HUD Widget ([`jules_hud.py`](file:///home/v/Projects/jules-vanager/jules_hud.py))**: Lightweight ANSI/text HUD status component formatting session metrics (`~/.config/jules-vanager/status.json`) for terminal overlays or status bars (`vlfstatus`).
 - **Browser Cookie Extractor ([`jules_cookie_extractor.py`](file:///home/v/Projects/jules-vanager/jules_cookie_extractor.py))**: Automated extraction tool fetching Jules session cookies from Chrome, Brave, and Firefox SQLite databases.
+
+---
+
+## ⚡ Task Offloading Workflow (`jules-start`)
+
+Start a Google Jules session in any target project directly from the CLI or within agent workflows:
+
+```bash
+# 1. From within any target project repository:
+jules-start "Fix memory leak in background worker and add unit tests"
+
+# 2. Specifying project by repo name, folder path, or owner/repo:
+jules-start paru-wrapper "Implement quiet flag for pacman output"
+jules-start ~/Projects/agv-dispatcher "Add health-check endpoint"
+
+# 3. With branch override, prompt file, or browser opening:
+jules-start -p my-repo -f task_spec.md --branch develop --open
+
+# 4. Dry-run resolution preview:
+jules-start jules-vanager "Test prompt" --dry-run
+```
 
 ---
 

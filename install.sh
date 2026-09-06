@@ -20,10 +20,11 @@ fi
 echo "🚀 [jules-manager] Installing executable CLI wrappers..."
 mkdir -p "$BIN_DIR" "$DESKTOP_DIR" "$SYSTEMD_USER_DIR"
 
-chmod +x "$SCRIPT_DIR/jules_manager.py" "$SCRIPT_DIR/jules_listener.py" "$SCRIPT_DIR/jules_tui.py" "$SCRIPT_DIR/jules_hud.py" "$SCRIPT_DIR/jules_scraper.py" "$SCRIPT_DIR/jules_cookie_extractor.py"
+chmod +x "$SCRIPT_DIR/jules_manager.py" "$SCRIPT_DIR/jules_listener.py" "$SCRIPT_DIR/jules_tui.py" "$SCRIPT_DIR/jules_hud.py" "$SCRIPT_DIR/jules_scraper.py" "$SCRIPT_DIR/jules_cookie_extractor.py" "$SCRIPT_DIR/jules_start.py"
 
 ln -sf "$SCRIPT_DIR/jules_manager.py" "$BIN_DIR/jules-manager"
 ln -sf "$SCRIPT_DIR/jules_manager.py" "$BIN_DIR/jules-vanager"
+ln -sf "$SCRIPT_DIR/jules_start.py" "$BIN_DIR/jules-start"
 ln -sf "$SCRIPT_DIR/jules_listener.py" "$BIN_DIR/jules-listener"
 ln -sf "$SCRIPT_DIR/jules_tui.py" "$BIN_DIR/jules-tui"
 ln -sf "$SCRIPT_DIR/jules_hud.py" "$BIN_DIR/jules-hud"
@@ -46,4 +47,4 @@ if [[ "$INSTALL_AGY" == "true" ]]; then
 fi
 
 echo "✅ [jules-manager] Installation completed successfully!"
-echo "Commands installed: jules-manager, jules-listener, jules-tui, jules-hud"
+echo "Commands installed: jules-vanager, jules-start, jules-listener, jules-tui, jules-hud"

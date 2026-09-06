@@ -430,11 +430,11 @@ class JulesTUIApp(App):
 
     CSS = """
     * {
-        background: transparent;
+        background: #000000;
     }
 
     Screen {
-        background: transparent;
+        background: #000000;
         color: #eab308;
     }
 
@@ -442,7 +442,7 @@ class JulesTUIApp(App):
         dock: top;
         height: auto;
         width: 100%;
-        background: transparent;
+        background: #000000;
     }
 
     #top-header {
@@ -457,19 +457,19 @@ class JulesTUIApp(App):
     Footer {
         dock: bottom;
         height: 1;
-        background: transparent;
+        background: #000000;
         color: #eab308;
     }
 
     FooterKey, FooterLabel {
-        background: transparent;
+        background: #000000;
     }
 
     #status-bar {
         height: auto;
         min-height: 1;
         width: 100%;
-        background: transparent;
+        background: #000000;
         color: #facc15;
         text-style: bold;
         text-align: center;
@@ -480,23 +480,24 @@ class JulesTUIApp(App):
         width: 45%;
         border-right: solid #eab308;
         height: 100%;
-        background: transparent;
+        background: #000000;
     }
 
     #right-pane {
         width: 55%;
         height: 100%;
         padding: 1 2;
-        background: transparent;
+        background: #000000;
         color: #06b6d4;
     }
 
-    Container, ScrollableContainer, ListView, ListItem, Static, Markdown, Label {
-        background: transparent;
+    Container, ScrollableContainer, ListView, ListItem, Static, Markdown, MarkdownBlock, Label {
+        background: #000000;
     }
 
     ListView {
         height: 100%;
+        background: #000000;
         border: none;
     }
 
@@ -504,6 +505,7 @@ class JulesTUIApp(App):
         padding: 0 1;
         height: auto;
         color: #eab308;
+        background: #000000;
         border-bottom: none;
     }
 

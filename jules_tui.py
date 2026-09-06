@@ -679,20 +679,33 @@ class JulesTUIApp(App):
         try:
             target_desc = "Unarchive" if self.show_archived else "Archive"
             
-            # Mutate active bindings on screen map
+            # Update binding descriptions in BINDINGS list and active screen bindings
+            for b in self.BINDINGS:
+                if getattr(b, "key", "") == "a":
+                    b.description = target_desc
+
             if hasattr(self.screen, "_bindings") and hasattr(self.screen._bindings, "bindings"):
                 for binding in self.screen._bindings.bindings.values():
                     if getattr(binding, "key", "") == "a":
                         binding.description = target_desc
 
-            # Mutate active_bindings cache map if present
             if hasattr(self.screen, "active_bindings"):
                 for key_tuple, active_info in list(self.screen.active_bindings.items()):
                     binding = active_info[1]
                     if getattr(binding, "key", "") == "a":
                         binding.description = target_desc
 
-            # Notify Footer widget subscribed to bindings_updated_signal
+            # Direct widget updates on Footer children
+            footer = self.query_one(Footer)
+            for child in footer.query("*"):
+                # Check FooterKey / FooterLabel children
+                if getattr(child, "text", "") in ("Archive", "Unarchive") or getattr(child, "label", "") in ("Archive", "Unarchive"):
+                    if hasattr(child, "text"):
+                        child.text = target_desc
+                    if hasattr(child, "update"):
+                        child.update(target_desc)
+                    child.refresh()
+
             self.screen.bindings_updated_signal.publish(self.screen)
         except Exception:
             pass

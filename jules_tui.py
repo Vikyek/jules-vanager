@@ -455,22 +455,23 @@ class JulesTUIApp(App):
         width: 1fr;
     }
 
-    .state-success {
+    /* Increase specificity so focus/highlight doesn't override */
+    ListItem .item-badge.state-success {
         color: #22c55e;
         text-style: bold;
     }
 
-    .state-error {
+    ListItem .item-badge.state-error {
         color: #ef4444;
         text-style: bold;
     }
 
-    .state-active {
+    ListItem .item-badge.state-active {
         color: #f59e0b;
         text-style: bold;
     }
 
-    .state-neutral {
+    ListItem .item-badge.state-neutral {
         color: #71717a;
     }
 

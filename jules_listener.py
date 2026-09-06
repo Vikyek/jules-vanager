@@ -48,6 +48,24 @@ def auto_archive_completed_sessions():
 
     archived_count = 0
 
+    # Collect branches of currently open Jules PRs across repos
+    open_jules_branches = set()
+    if os.path.exists(PROJECTS_DIR):
+        for entry in os.listdir(PROJECTS_DIR):
+            full_p = os.path.join(PROJECTS_DIR, entry)
+            if os.path.isdir(full_p) and os.path.exists(os.path.join(full_p, ".git")):
+                try:
+                    cmd = ["gh", "pr", "list", "--state", "open", "--json", "headRefName"]
+                    pr_out = subprocess.run(cmd, cwd=full_p, capture_output=True, text=True)
+                    if pr_out.returncode == 0:
+                        prs = json.loads(pr_out.stdout)
+                        for pr in prs:
+                            br = pr.get("headRefName", "")
+                            if br:
+                                open_jules_branches.add(br)
+                except Exception:
+                    pass
+
     for session in res.get("sessions", []):
         session_id = session.get("name", "").split("/")[-1]
         state = session.get("state", "")
@@ -58,8 +76,13 @@ def auto_archive_completed_sessions():
         rep_name = src_ctx.get("source", "").replace("sources/github/", "").replace("sources/", "")
         br_name = src_ctx.get("githubRepoContext", {}).get("startingBranch", "main")
 
-        # Strict Prerequisite: Only archive if session state is explicitly terminal/completed/merged
+        # Strict Prerequisite: Only archive if session state is terminal AND no open PR remains for its branch
         if state in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED", "CLOSED"):
+            has_open_pr = any(session_id in br or br == br_name for br in open_jules_branches)
+            if has_open_pr:
+                print(f"⏳ [Jules Listener] Deferring auto-archive for session {session_id} [{state}]: Open PR pending merge on branch '{br_name}'")
+                continue
+
             arc_res = archive_session(session_id, action_by="auto", title=clean_t, repo=rep_name, branch=br_name)
             if arc_res and "error" not in arc_res:
                 archived_count += 1
@@ -291,15 +314,21 @@ def check_and_handle_jules_prs(repo_path):
             if comments_res.returncode == 0:
                 pr_detail = json.loads(comments_res.stdout)
                 mergeable = pr_detail.get("mergeable", mergeable)
+                
                 for comment in pr_detail.get("comments", []):
                     body = comment.get("body", "")
-                    if any(kw in body.lower() for kw in ["issue", "issue_to_address", "blocking findings", "sourcery", "suggestion", "refactor", "conflict"]):
+                    # Ignore general Sourcery feedback prompts/footers; only trigger on explicit blocking tags
+                    if "<issue_to_address>" in body or "blocking findings" in body.lower():
                         has_review_issues = True
                         review_feedback += f"\n--- Comment ---\n{body}"
+                        
                 for review in pr_detail.get("reviews", []):
                     body = review.get("body", "")
-                    state = review.get("state", "")
-                    if state == "CHANGES_REQUESTED" or any(kw in body.lower() for kw in ["blocking findings", "sourcery", "suggestion", "conflict"]):
+                    state = (review.get("state") or "").upper()
+                    if state == "CHANGES_REQUESTED":
+                        has_review_issues = True
+                        review_feedback += f"\n--- Review [{state}] ---\n{body}"
+                    elif state not in ("APPROVED", "DISMISSED") and ("<issue_to_address>" in body or "blocking findings" in body.lower()):
                         has_review_issues = True
                         review_feedback += f"\n--- Review [{state}] ---\n{body}"
                 for check in pr_detail.get("statusCheckRollup", []):

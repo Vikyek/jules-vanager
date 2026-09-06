@@ -736,6 +736,7 @@ class JulesTUIApp(App):
     BINDINGS = [
         Binding("r", "refresh_sessions", "Refresh", show=True),
         Binding("g", "toggle_suggestions", "Suggestions Panel", show=True),
+        Binding("d", "dismiss_suggestion_action", "Dismiss Suggestion", show=True),
         Binding("a", "archive_selected", "Archive", show=True),
         Binding("v", "toggle_archived", "Archived Panel", show=True),
         Binding("m", "cycle_filter", "Filter Mode", show=True),
@@ -1464,9 +1465,27 @@ class JulesTUIApp(App):
             self.call_from_thread(self.update_status, f"Error sending reply: {e}")
             self.call_from_thread(self.clear_session_answering, sid)
 
+    def action_dismiss_suggestion_action(self) -> None:
+        list_view = self.query_one("#session-list", ListView)
+        if isinstance(list_view.highlighted_child, SessionItem):
+            s = list_view.highlighted_child.session
+            if s.get("is_suggestion"):
+                title = s.get("title", "").strip()
+                if title:
+                    dismiss_suggestion(title)
+                    self.suggestions = [sug for sug in getattr(self, "suggestions", []) if sug.get("title", "").strip() != title]
+                    self.update_status(f"Dismissed suggestion: {title[:50]}...")
+                    self.populate_session_list()
+                    return
+        self.update_status("Highlight a suggestion to dismiss.")
+
     def action_archive_selected(self) -> None:
         list_view = self.query_one("#session-list", ListView)
         if isinstance(list_view.highlighted_child, SessionItem):
+            s = list_view.highlighted_child.session
+            if s.get("is_suggestion"):
+                self.action_dismiss_suggestion_action()
+                return
             sid = list_view.highlighted_child.sid
             if self.show_archived:
                 self.update_status(f"Unarchiving session {sid}...")

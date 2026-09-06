@@ -23,6 +23,87 @@ from textual.widgets import Header, Footer, Static, ListView, ListItem, Label, I
 from textual.worker import Worker, WorkerState
 from textual.reactive import reactive
 from textual import work
+import operator
+from functools import cached_property
+from textual.visual import Style
+from textual.color import Color
+from textual.renderables.blank import Blank
+from rich.style import Style as RichStyle
+from textual.theme import Theme
+
+# Force Textual Blank renderable to be transparent when color is transparent
+def _patched_blank_init(self, color: Color | str = "transparent") -> None:
+    c = Color.parse(color) if isinstance(color, str) else color
+    if c.a == 0:
+        self._rich_style = RichStyle()
+    else:
+        self._rich_style = RichStyle.from_color(bgcolor=c.rich_color)
+
+Blank.__init__ = _patched_blank_init
+
+# Force Textual Visual Style conversion to omit background color when alpha is 0
+_get_simple_attrs = operator.attrgetter(
+    "background", "foreground", "bold", "dim", "italic",
+    "underline", "underline2", "reverse", "strike", "blink",
+    "link", "_meta"
+)
+
+def _patched_style_rich_style(self):
+    (
+        background, foreground, bold, dim, italic,
+        underline, underline2, reverse, strike, blink,
+        link, _meta
+    ) = _get_simple_attrs(self)
+
+    color = None if foreground is None else background + foreground
+    bg_rich = None if (background is None or background.a == 0) else background.rich_color
+
+    return RichStyle(
+        color=None if color is None else color.rich_color,
+        bgcolor=bg_rich,
+        bold=bold,
+        dim=dim,
+        italic=italic,
+        underline=underline,
+        underline2=underline2,
+        reverse=reverse,
+        strike=strike,
+        blink=blink,
+        link=link,
+        meta=None if _meta is None else self.meta,
+    )
+
+_cp = cached_property(_patched_style_rich_style)
+_cp.__set_name__(Style, "rich_style")
+Style.rich_style = _cp
+
+TRANSPARENT_THEME = Theme(
+    name="transparent-theme",
+    primary="#eab308",
+    secondary="#eab308",
+    warning="#f59e0b",
+    error="#ef4444",
+    success="#22c55e",
+    accent="#eab308",
+    foreground="#eab308",
+    background=Color(0, 0, 0, 0),
+    surface=Color(0, 0, 0, 0),
+    panel=Color(0, 0, 0, 0),
+    boost=Color(0, 0, 0, 0),
+    dark=True,
+    variables={
+        "block-cursor-blurred-background": "transparent",
+        "block-hover-background": "transparent",
+        "block-cursor-background": "#eab308",
+        "footer-background": "transparent",
+        "markdown-h1-background": "transparent",
+        "markdown-h2-background": "transparent",
+        "markdown-h3-background": "transparent",
+        "markdown-h4-background": "transparent",
+        "markdown-h5-background": "transparent",
+        "markdown-h6-background": "transparent",
+    }
+)
 
 # Import API manager functions
 from jules_manager import list_sessions, get_session_activities, send_message, archive_session, unarchive_session, _make_request
@@ -571,8 +652,19 @@ class JulesTUIApp(App):
         background: transparent !important;
     }
 
-    ListView, ListView:focus, ListView > ListItem, ListView > ListItem:enabled, ListView > ListItem:hover {
+    ListView, ListView:focus {
         background: transparent !important;
+        background-tint: transparent !important;
+    }
+
+    ListView > ListItem, ListView > ListItem:enabled, ListView > ListItem:hover, ListView > ListItem.-hovered {
+        background: transparent !important;
+        background-tint: transparent !important;
+    }
+
+    ListView > ListItem.-highlight, ListItem.-highlight {
+        background: transparent !important;
+        background-tint: transparent !important;
     }
 
     ListItem, ListItem:enabled, ListItem:hover {
@@ -580,6 +672,7 @@ class JulesTUIApp(App):
         height: auto;
         color: #eab308;
         background: transparent !important;
+        background-tint: transparent !important;
         border-bottom: none;
     }
 
@@ -588,18 +681,24 @@ class JulesTUIApp(App):
         background: transparent !important;
     }
 
-    ListItem:focus, ListItem.--highlight, ListView > ListItem:focus, ListView > ListItem.--highlight {
+    ListItem:focus, ListItem.-highlight, ListView > ListItem:focus, ListView > ListItem.-highlight {
         background: #eab308 !important;
         color: #000000 !important;
     }
 
-    ListItem:focus Static, ListItem.--highlight Static, ListView > ListItem:focus Static, ListView > ListItem.--highlight Static {
+    ListItem:focus Static, ListItem.-highlight Static, ListView > ListItem:focus Static, ListView > ListItem.-highlight Static {
         background: #eab308 !important;
         color: #000000 !important;
     }
 
-    Markdown, MarkdownBlock, MarkdownHeader, MarkdownParagraph, MarkdownUnorderedList, MarkdownOrderedList, MarkdownListItem, MarkdownFence, MarkdownCodeBlock, MarkdownTable, MarkdownTableCell, MarkdownTableTitle, MarkdownQuote, MarkdownBullet, MarkdownEmphasis, MarkdownStrong {
+    Markdown, MarkdownBlock, MarkdownHeader, MarkdownParagraph, MarkdownUnorderedList, MarkdownOrderedList, MarkdownListItem, MarkdownFence, MarkdownCodeBlock, MarkdownTable, MarkdownTableCell, MarkdownTableTitle, MarkdownQuote, MarkdownBullet, MarkdownEmphasis, MarkdownStrong, MarkdownH1, MarkdownH2, MarkdownH3, MarkdownH4, MarkdownH5, MarkdownH6 {
         background: transparent !important;
+        background-tint: transparent !important;
+    }
+
+    MarkdownBlock > .code_inline {
+        background: transparent !important;
+        color: #facc15 !important;
     }
 
     ScrollBar, ScrollBarCorner, ScrollBarHandle, ScrollBarGrip, ScrollBar.--vertical, ScrollBar.--horizontal {
@@ -662,6 +761,8 @@ class JulesTUIApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
+        self.register_theme(TRANSPARENT_THEME)
+        self.theme = "transparent-theme"
         self.populate_session_list()
         self.fetch_data_worker()
         self.set_interval(0.1, self.animate_status_bar)

@@ -1009,25 +1009,36 @@ class JulesTUIApp(App):
         try:
             self.spinner_idx = (self.spinner_idx + 1) % len(self.spinner_frames)
             spinner = self.spinner_frames[self.spinner_idx]
+            
+            # Smooth animated pulse for top header title
+            header = self.query_one("#top-header", Static)
+            pulse_frames = ["⚡", "✨", "🌟", "💫", "🔥", "💫", "🌟", "✨"]
+            header_icon = pulse_frames[self.spinner_idx % len(pulse_frames)]
+            header.update(f" {header_icon} GOOGLE JULES API VANAGER & LISTENER TUI {header_icon} ")
+
             bar = self.query_one("#status-bar", Static)
-            is_active_op = any(kw in self.status_msg.lower() for kw in ("fetching", "refreshing", "sending", "archiving", "syncing"))
+            is_active_op = any(kw in self.status_msg.lower() for kw in ("fetching", "refreshing", "sending", "archiving", "syncing", "launching", "stealing", "starting"))
             service_active = is_listener_service_active()
             
+            # Animated status wave effect
+            wave_frames = ["░▒▓█▓▒░", "▒▓█▓▒░▒", "▓█▓▒░▒▓", "█▓▒░▒▓█", "▓▒░▒▓█▓", "▒░▒▓█▓▒"]
+            wave = wave_frames[self.spinner_idx % len(wave_frames)]
+
             if is_active_op:
-                listener_str = f"⚡ Listener: RUNNING {spinner}"
+                listener_str = f"⚡ RUNNING [{wave}] {spinner}"
             elif service_active:
-                listener_str = "● Listener: ACTIVE (systemd)"
+                listener_str = f"● ACTIVE {spinner} (systemd)"
             else:
-                listener_str = "○ Listener: STOPPED"
+                listener_str = "○ STOPPED"
 
             if self.show_suggestions:
-                panel_str = "💡 VIEW: PANEL SUGGESTIONS"
+                panel_str = f"💡 PANEL SUGGESTIONS {spinner}"
             elif self.show_archived:
-                panel_str = "📂 VIEW: ARCHIVED SESSIONS PANEL"
+                panel_str = f"📂 ARCHIVED SESSIONS {spinner}"
             else:
-                panel_str = f"📋 VIEW: ACTIVE SESSIONS ({self.filter_mode})"
+                panel_str = f"📋 ACTIVE SESSIONS ({self.filter_mode}) {spinner}"
 
-            bar.update(f" {panel_str} | {listener_str} | {self.status_msg}")
+            bar.update(f" {panel_str}  │  {listener_str}  │  {self.status_msg}")
 
             # High-frequency dynamic timer tick for active session items every 100ms
             list_view = self.query_one("#session-list", ListView)

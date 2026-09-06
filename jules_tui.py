@@ -436,7 +436,7 @@ class JulesTUIApp(App):
 
     #header-container {
         dock: top;
-        height: 3;
+        height: auto;
         width: 100%;
     }
 
@@ -457,7 +457,8 @@ class JulesTUIApp(App):
     }
 
     #status-bar {
-        height: 1;
+        height: auto;
+        min-height: 1;
         width: 100%;
         background: #18181b;
         color: #facc15;

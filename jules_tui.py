@@ -220,7 +220,7 @@ class SessionItem(ListItem):
             color = "#71717a"
 
         markup = f"[{color} bold][{state}][/{color} bold] {title}"
-        yield Label(markup, id="item-title")
+        yield Static(markup, id="item-title")
 
 
 class ReplyModalScreen(ModalScreen[Optional[str]]):

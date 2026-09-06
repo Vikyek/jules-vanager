@@ -40,15 +40,15 @@ class TestJulesTUIApp(unittest.IsolatedAsyncioTestCase):
             await pilot.press("v")
             self.assertTrue(app.show_archived)
 
-            # Verify binding description updated in app bindings & footer keys
-            b_desc = next(b.description for b in app.BINDINGS if getattr(b, "key", "") == "a")
-            self.assertEqual(b_desc, "Unarchive")
+            # Verify dynamic action label
+            _, label = app.check_action_archive_selected()
+            self.assertEqual(label, "Unarchive")
 
             # Press 'v' to toggle back
             await pilot.press("v")
             self.assertFalse(app.show_archived)
-            b_desc = next(b.description for b in app.BINDINGS if getattr(b, "key", "") == "a")
-            self.assertEqual(b_desc, "Archive")
+            _, label = app.check_action_archive_selected()
+            self.assertEqual(label, "Archive")
 
     async def test_modal_screen_rendering(self):
         app = JulesTUIApp()

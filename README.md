@@ -14,8 +14,15 @@ Standalone Google Jules API Manager, Listener Daemon, Reactive Textual TUI, and 
 - **Reactive Textual TUI ([`jules_tui.py`](file:///home/v/Projects/jules-vanager/jules_tui.py))**: Modern, reactive terminal UI built with [Textual](https://textual.textualize.io/) (`textual.app.App`, `@work` background thread workers, `ListView`, `Markdown` inspector, `ModalScreen` prompt reply dialogs, and `💡 Panel Suggestions`).
 - **Conky HUD Widget ([`jules_hud.py`](file:///home/v/Projects/jules-vanager/jules_hud.py))**: Lightweight ANSI/text HUD status component formatting session metrics (`~/.config/jules-vanager/status.json`) for terminal overlays or status bars (`vlfstatus`).
 - **Browser Cookie Extractor ([`jules_cookie_extractor.py`](file:///home/v/Projects/jules-vanager/jules_cookie_extractor.py))**: Automated extraction tool fetching Jules session cookies from Chrome, Brave, and Firefox SQLite databases.
-- **Google Jules Action Integration ([`google-labs-code/jules-action`](https://github.com/google-labs-code/jules-action))**: Integrated support for GitHub Actions workflows powering continuous background refactoring, dependency updates, and automated code quality tasks.
-- **Google Stitch Skills Integration ([`google-labs-code/stitch-skills`](https://github.com/google-labs-code/stitch-skills))**: Integrated UI/UX design generation, screen variants, and design system capabilities via Stitch MCP tools and agent skills.
+
+### 🌐 Google Labs Code Ecosystem Integrations (`google-labs-code`)
+- **[jules-action](https://github.com/google-labs-code/jules-action)**: GitHub Actions workflows powering automated PR reviews, refactoring, and code quality tasks.
+- **[jules-sdk](https://github.com/google-labs-code/jules-sdk)**: Core SDK components for programmatic Jules session orchestration and activity trajectory handling.
+- **[jules-skills](https://github.com/google-labs-code/jules-skills)**: Agent skills for automated issue triage, code reviews, and codebase migrations.
+- **[jules-awesome-list](https://github.com/google-labs-code/jules-awesome-list)**: Curated prompt templates, strategies, and best practices for Jules AI tasks.
+- **[stitch-skills](https://github.com/google-labs-code/stitch-skills)**: Agent skills enabling AI agents to design, build, and iterate UI screens via Stitch MCP tools.
+- **[stitch-sdk](https://github.com/google-labs-code/stitch-sdk)**: Programmatic UI screen generation, HTML extraction, and visual screenshot rendering.
+- **[design.md](https://github.com/google-labs-code/design.md)**: Open-source specification combining YAML design tokens with Markdown rationale for AI design systems.
 
 ---
 

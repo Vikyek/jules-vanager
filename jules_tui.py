@@ -999,10 +999,10 @@ class JulesTUIApp(App):
         self.populate_session_list()
         self.fetch_data_worker()
         self.set_interval(0.1, self.animate_status_bar)
-        self.set_interval(30, self.auto_refresh_sessions)
+        self.set_interval(5, self.auto_refresh_sessions)
 
     def auto_refresh_sessions(self) -> None:
-        """Periodic background refresh of sessions list."""
+        """Periodic dynamic background refresh of sessions list every 5 seconds."""
         self.fetch_data_worker()
 
     def animate_status_bar(self) -> None:
@@ -1029,14 +1029,13 @@ class JulesTUIApp(App):
 
             bar.update(f" {panel_str} | {listener_str} | {self.status_msg}")
 
-            # Live timer tick for active session items every 1s
-            if self.spinner_idx % 10 == 0:
-                list_view = self.query_one("#session-list", ListView)
-                for item in list_view.children:
-                    if isinstance(item, SessionItem):
-                        st = item.session.get("state", "").upper()
-                        if "IN_PROGRESS" in st or "RUNNING" in st or "AWAITING" in st or "PAUSED" in st or item.session.get("is_agy_stolen"):
-                            item.update_rendering()
+            # High-frequency dynamic timer tick for active session items every 100ms
+            list_view = self.query_one("#session-list", ListView)
+            for item in list_view.children:
+                if isinstance(item, SessionItem):
+                    st = item.session.get("state", "").upper()
+                    if "IN_PROGRESS" in st or "RUNNING" in st or "AWAITING" in st or "PAUSED" in st or item.session.get("is_agy_stolen"):
+                        item.update_rendering()
 
             if getattr(self, "answering_sessions", None):
                 now = time.time()

@@ -300,8 +300,68 @@ class ReplyModalScreen(ModalScreen[Optional[str]]):
         val = event.value.strip()
         self.dismiss(val if val else None)
 
-    def action_dismiss_modal(self) -> None:
-        self.dismiss(None)
+class ConfirmModalScreen(ModalScreen[bool]):
+    """Modal screen for action confirmation prompts."""
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel", show=True),
+    ]
+
+    DEFAULT_CSS = """
+    ConfirmModalScreen {
+        align: center middle;
+        background: rgba(0, 0, 0, 0.7);
+    }
+
+    #confirm-dialog {
+        padding: 1 2;
+        background: $surface;
+        border: thick $warning;
+        width: 60;
+        height: 12;
+    }
+
+    #confirm-title {
+        text-style: bold;
+        color: $warning;
+        margin-bottom: 1;
+    }
+
+    #confirm-prompt {
+        color: $text;
+        margin-bottom: 1;
+    }
+
+    #confirm-buttons {
+        height: 3;
+        align: right middle;
+    }
+
+    Button {
+        margin-left: 1;
+    }
+    """
+
+    def __init__(self, title: str, prompt_text: str) -> None:
+        super().__init__()
+        self.title_text = title
+        self.prompt_text = prompt_text
+
+    def compose(self) -> ComposeResult:
+        with Container(id="confirm-dialog"):
+            yield Label(self.title_text, id="confirm-title")
+            yield Static(self.prompt_text, id="confirm-prompt")
+            with Horizontal(id="confirm-buttons"):
+                yield Button("Cancel [Esc]", variant="error", id="cancel")
+                yield Button("Confirm [Enter]", variant="primary", id="confirm")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "confirm":
+            self.dismiss(True)
+        else:
+            self.dismiss(False)
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
 
 
 class JulesTUIApp(App):
@@ -562,8 +622,13 @@ class JulesTUIApp(App):
         list_view = self.query_one("#session-list", ListView)
         if isinstance(list_view.highlighted_child, SessionItem):
             sid = list_view.highlighted_child.sid
-            self.update_status(f"Archiving session {sid}...")
-            self.archive_worker(sid)
+
+            def handle_confirm(confirmed: bool) -> None:
+                if confirmed:
+                    self.update_status(f"Archiving session {sid}...")
+                    self.archive_worker(sid)
+
+            self.push_screen(ConfirmModalScreen("⚠️ Archive Session", f"Are you sure you want to archive session [{sid}]?"), handle_confirm)
 
     @work(exclusive=True, thread=True)
     def archive_worker(self, sid: str) -> None:
@@ -575,8 +640,12 @@ class JulesTUIApp(App):
             self.call_from_thread(self.update_status, f"Archive error: {e}")
 
     def action_toggle_service(self) -> None:
-        msg = toggle_systemd_service()
-        self.update_status(msg)
+        def handle_confirm(confirmed: bool) -> None:
+            if confirmed:
+                msg = toggle_systemd_service()
+                self.update_status(msg)
+
+        self.push_screen(ConfirmModalScreen("⚠️ Toggle Listener Service", "Are you sure you want to stop/start the jules-listener systemd service?"), handle_confirm)
 
     def action_toggle_autostart(self) -> None:
         msg = toggle_systemd_autostart()

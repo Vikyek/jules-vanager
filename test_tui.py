@@ -35,6 +35,7 @@ class TestJulesTUIApp(unittest.IsolatedAsyncioTestCase):
 
             await pilot.press("m")
             self.assertEqual(app.filter_mode, "ALL")
+            await pilot.exit(0)
 
     async def test_archive_toggle_footer_binding(self):
         app = JulesTUIApp()
@@ -53,6 +54,7 @@ class TestJulesTUIApp(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(app.show_archived)
             _, label = app.check_action_archive_selected()
             self.assertEqual(label, "Archive")
+            await pilot.exit(0)
 
     async def test_modal_screen_rendering(self):
         app = JulesTUIApp()
@@ -79,6 +81,7 @@ class TestJulesTUIApp(unittest.IsolatedAsyncioTestCase):
 
             # Verify return to main screen
             self.assertFalse(isinstance(app.screen, ReplyModalScreen))
+            await pilot.exit(0)
 
     async def test_reply_modal_multiline_submission(self):
         app = JulesTUIApp()
@@ -100,6 +103,7 @@ class TestJulesTUIApp(unittest.IsolatedAsyncioTestCase):
 
             # Verify callback received multiline text
             self.assertEqual(result_container, ["First line of reply\nSecond line with code\nThird line done"])
+            await pilot.exit(0)
 
     async def test_answering_badge_and_state(self):
         app = JulesTUIApp()
@@ -121,10 +125,87 @@ class TestJulesTUIApp(unittest.IsolatedAsyncioTestCase):
             # Clear answering status
             app.clear_session_answering("test-sid-999")
             self.assertNotIn("test-sid-999", app.answering_sessions)
+            await pilot.exit(0)
 
-    async def test_session_badge_icons_and_styling(self):
-        """Verify distinct icons and rich hex styling for session badges (commit 04e121f)."""
+    async def test_suggestions_panel_toggle_and_cycling(self):
         app = JulesTUIApp()
+        app.suggestions = [
+            {"title": "Audit auth module", "details": "Fix potential timing attack", "repo": "Vikyek/paru-wrapper"}
+        ]
+        async with app.run_test() as pilot:
+            self.assertFalse(app.show_suggestions)
+            # Toggle suggestions view ('g')
+            await pilot.press("g")
+            self.assertTrue(app.show_suggestions)
+            self.assertFalse(app.show_archived)
+
+            # Cycle filter mode ('m') should reset suggestions view
+            await pilot.press("m")
+            self.assertFalse(app.show_suggestions)
+            self.assertEqual(app.filter_mode, "ACTIVE")
+
+            # Toggle suggestions view back on
+            await pilot.press("g")
+            self.assertTrue(app.show_suggestions)
+
+            # Toggle archive panel ('v') should disable suggestions view
+            await pilot.press("v")
+            self.assertFalse(app.show_suggestions)
+            self.assertTrue(app.show_archived)
+
+            await pilot.exit(0)
+
+class TestPanelSuggestionsAndDirectSpawning(unittest.TestCase):
+
+    def test_inspect_reply_on_suggestion_spawns_worker_without_modal(self):
+        """Verify action_inspect_reply directly spawns worker and dismisses suggestion without pushing modal screen."""
+        from unittest.mock import patch, MagicMock
+        from textual.widgets import ListView
+
+        app = JulesTUIApp()
+        app.suggestions = [
+            {"title": "Optimize DB queries", "repo": "Vikyek/jules-manager", "details": "Add index", "is_suggestion": True}
+        ]
+
+        suggestion_item = SessionItem({"title": "Optimize DB queries", "repo": "Vikyek/jules-manager", "details": "Add index", "is_suggestion": True})
+        list_view = MagicMock(spec=ListView)
+        list_view.highlighted_child = suggestion_item
+
+        with patch.object(app, "query_one", return_value=list_view), \
+             patch("jules_tui.dismiss_suggestion") as mock_dismiss, \
+             patch.object(app, "spawn_suggestion_worker") as mock_spawn, \
+             patch.object(app, "push_screen") as mock_push_screen:
+
+            app.action_inspect_reply()
+
+            # Verify auto-dismissal and session spawning triggered
+            mock_dismiss.assert_called_once_with("Optimize DB queries")
+            mock_spawn.assert_called_once_with("Vikyek/jules-manager", "Add index", "Optimize DB queries")
+            
+            # Verify no reply modal screen was pushed
+            mock_push_screen.assert_not_called()
+
+    def test_fetch_activities_worker_skips_suggestions_and_agy(self):
+        """Verify fetch_session_activities_worker returns early for suggestions and AGY stolen sessions."""
+        from unittest.mock import patch
+
+        app = JulesTUIApp()
+        with patch("jules_tui.get_session_activities") as mock_get_act:
+            app.fetch_session_activities_worker("sug-12345", {"is_suggestion": True}, "N/A")
+            app.fetch_session_activities_worker("agy-67890", {"is_agy_stolen": True}, "N/A")
+            app.fetch_session_activities_worker("pr-111", {"is_unassigned_pr": True}, "N/A")
+            mock_get_act.assert_not_called()
+
+
+class TestSessionBadgeRendering(unittest.TestCase):
+    """Regression tests for session badge icon mappings and rich hex styling (commit 04e121f)."""
+
+    def test_session_badge_icons_and_styling(self):
+        class DummyApp:
+            answering_sessions = set()
+            show_archived = False
+
+        app = DummyApp()
         test_cases = [
             ("SUGGESTION", "[💡 SUGGESTION]", "bold #eab308"),
             ("UNASSIGNED_PR", "[🐙 UNASSIGNED PR]", "bold #c084fc"),
@@ -147,23 +228,26 @@ class TestJulesTUIApp(unittest.IsolatedAsyncioTestCase):
             ("UNKNOWN_STATE", "[UNKNOWN_STATE]", "#71717a"),
         ]
 
-        async with app.run_test() as pilot:
-            for state, expected_badge, expected_style in test_cases:
-                item = SessionItem({"id": f"sid-{state}", "state": state, "title": f"Test {state}"})
-                item.app = app
-                item.update_rendering()
-                static_widget = item.query_one("#item-static")
-                rendered_text = static_widget.renderable
-                
-                # Check rendered Text span styles and content
-                full_plain = rendered_text.plain
-                self.assertTrue(full_plain.startswith(expected_badge), f"Expected {expected_badge} in {full_plain} for state {state}")
-                
-                # Verify first span style matches badge_style when not focused
-                badge_span_style = str(rendered_text.spans[0].style)
-                self.assertEqual(badge_span_style, expected_style, f"State {state} expected style {expected_style}, got {badge_span_style}")
+        from textual.widgets import Static
+        for state, expected_badge, expected_style in test_cases:
+            item = SessionItem({"id": f"sid-{state}", "state": state, "title": f"Test {state}"})
+            item.app = app
+            static = Static("", id="item-static")
+            item._nodes = [static]
+            item.update_rendering()
+            rendered_text = static.renderable
+
+            # Check rendered Text span styles and content
+            full_plain = rendered_text.plain
+            self.assertTrue(full_plain.startswith(expected_badge), f"Expected {expected_badge} in {full_plain} for state {state}")
+
+            # Verify first span style matches badge_style when not focused
+            badge_span_style = str(rendered_text.spans[0].style)
+            self.assertEqual(badge_span_style, expected_style, f"State {state} expected style {expected_style}, got {badge_span_style}")
 
 class TestScraperCommitFiltering(unittest.TestCase):
+
+
 
     def test_deduplicate_and_filter_merge_commits(self):
         from jules_scraper import fetch_jules_suggestions
@@ -211,10 +295,12 @@ class TestStuckRecoveryPipeline(unittest.TestCase):
     def test_stage1_unstuck_nudge_trigger(self):
         """Test Stage 1 UNSTUCK_PROMPT triggers when inactive for >300s with no previous unstuck attempt."""
         import time
+        import datetime
         from unittest.mock import patch, ANY
         from jules_listener import check_jules_api_queries
 
         now = time.time()
+        past_iso = datetime.datetime.fromtimestamp(now - 400, datetime.timezone.utc).isoformat()
         mock_sessions = {
             "sessions": [
                 {
@@ -227,11 +313,11 @@ class TestStuckRecoveryPipeline(unittest.TestCase):
         }
         mock_activities = {
             "activities": [
-                {"createTime": "2026-09-06T15:00:00Z", "agentMessaged": {"agentMessage": "Working..."}}
+                {"createTime": past_iso, "agentMessaged": {"agentMessage": "Working..."}}
             ]
         }
 
-        with patch("jules_listener.get_active_sessions", return_value=mock_sessions), \
+        with patch("jules_listener.list_sessions", return_value=mock_sessions), \
              patch("jules_listener.get_session_activities", return_value=mock_activities), \
              patch("jules_listener.send_message", return_value={"status": "ok"}) as mock_send, \
              patch("jules_manager.log_action") as mock_log, \
@@ -270,7 +356,7 @@ class TestStuckRecoveryPipeline(unittest.TestCase):
             ]
         }
 
-        with patch("jules_listener.get_active_sessions", return_value=mock_sessions), \
+        with patch("jules_listener.list_sessions", return_value=mock_sessions), \
              patch("jules_listener.get_session_activities", return_value=mock_activities), \
              patch("jules_listener.send_message") as mock_send, \
              patch("json.load", return_value=mock_actions_log), \
@@ -284,6 +370,66 @@ class TestStuckRecoveryPipeline(unittest.TestCase):
             mock_log.assert_called_once()
             self.assertEqual(mock_log.call_args[0][1], "AGY_DISPATCH")
             mock_archive.assert_called_once_with("sess-stuck-2", action_by="auto", title="Test stuck task stage 2", repo="owner/repo", branch="main")
+
+
+class TestSuggestionAutoDismissal(unittest.TestCase):
+
+    def test_auto_dismiss_panel_suggestion_on_spawn(self):
+        """Verify suggestion auto-dismisses when spawned into a session (commit 8152dda)."""
+        from unittest.mock import patch, MagicMock
+        from textual.widgets import ListView
+
+        app = JulesTUIApp()
+        app.suggestions = [
+            {"title": "Fix auth middleware bug", "repo": "Vikyek/jules-manager", "details": "Fix auth error", "is_suggestion": True},
+            {"title": "Add unit test for run_cmd", "repo": "Vikyek/paru-wrapper", "details": "Add test", "is_suggestion": True},
+        ]
+
+        suggestion_item = SessionItem(app.suggestions[0])
+        event = ListView.Selected(MagicMock(), suggestion_item, 0)
+
+        with patch("jules_tui.dismiss_suggestion") as mock_dismiss, \
+             patch.object(app, "spawn_suggestion_worker") as mock_spawn, \
+             patch.object(app, "populate_session_list"):
+
+            app.on_list_view_selected(event)
+
+            # Verify dismiss_suggestion was called with the exact title
+            mock_dismiss.assert_called_once_with("Fix auth middleware bug")
+            
+            # Verify suggestion was filtered out from app.suggestions
+            remaining_titles = [s.get("title") for s in app.suggestions]
+            self.assertNotIn("Fix auth middleware bug", remaining_titles)
+            self.assertIn("Add unit test for run_cmd", remaining_titles)
+
+            # Verify spawn_suggestion_worker was invoked
+            mock_spawn.assert_called_once_with("Vikyek/jules-manager", "Fix auth error", "Fix auth middleware bug")
+
+    def test_auto_dismiss_handles_edge_cases(self):
+        """Verify robust handling of whitespace and None titles in suggestion dictionary during dismissal."""
+        from unittest.mock import patch, MagicMock
+        from textual.widgets import ListView
+
+        app = JulesTUIApp()
+        app.suggestions = [
+            {"title": None, "details": "No title suggestion", "is_suggestion": True},
+            {"title": "   ", "details": "Blank title suggestion", "is_suggestion": True},
+            {"title": " Valid Suggestion ", "details": "Valid details", "is_suggestion": True},
+        ]
+
+        # Select valid suggestion with trailing spaces
+        suggestion_item = SessionItem({"title": " Valid Suggestion ", "repo": "paru-wrapper", "is_suggestion": True})
+        event = ListView.Selected(MagicMock(), suggestion_item, 0)
+
+        with patch("jules_tui.dismiss_suggestion") as mock_dismiss, \
+             patch.object(app, "spawn_suggestion_worker"), \
+             patch.object(app, "populate_session_list"):
+
+            # Should not raise AttributeError when processing None/whitespace items in app.suggestions
+            app.on_list_view_selected(event)
+            mock_dismiss.assert_called_once_with(" Valid Suggestion ")
+            self.assertEqual(len(app.suggestions), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

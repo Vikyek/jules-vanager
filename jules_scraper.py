@@ -155,7 +155,7 @@ def fetch_sourcery_pr_suggestions():
                         if len(parts) == 2:
                             c_hash, c_msg = parts
                             norm_msg = c_msg.strip().lower()
-                            if "merge pull request" in norm_msg or "merge branch" in norm_msg:
+                            if not norm_msg or any(m in norm_msg for m in ["merge pull request", "merge branch", "merge remote-tracking", "merge tag", "merge commit"]):
                                 continue
                             stitle = f"Audit {clean_repo} ({c_hash}): {c_msg[:50]}"
                             if stitle not in seen_titles:

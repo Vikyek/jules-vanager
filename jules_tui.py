@@ -679,32 +679,23 @@ class JulesTUIApp(App):
         try:
             target_desc = "Unarchive" if self.show_archived else "Archive"
             
-            # Update binding descriptions in BINDINGS list and active screen bindings
+            # Update BINDINGS declaration array
             for b in self.BINDINGS:
-                if getattr(b, "key", "") == "a":
+                if getattr(b, "key", "") == "a" or getattr(b, "action", "") == "archive_selected":
                     b.description = target_desc
 
+            # Update active screen bindings
             if hasattr(self.screen, "_bindings") and hasattr(self.screen._bindings, "bindings"):
                 for binding in self.screen._bindings.bindings.values():
-                    if getattr(binding, "key", "") == "a":
+                    if getattr(binding, "key", "") == "a" or getattr(binding, "action", "") == "archive_selected":
                         binding.description = target_desc
 
-            if hasattr(self.screen, "active_bindings"):
-                for key_tuple, active_info in list(self.screen.active_bindings.items()):
-                    binding = active_info[1]
-                    if getattr(binding, "key", "") == "a":
-                        binding.description = target_desc
-
-            # Direct widget updates on Footer children
-            footer = self.query_one(Footer)
-            for child in footer.query("*"):
-                # Check FooterKey / FooterLabel children
-                if getattr(child, "text", "") in ("Archive", "Unarchive") or getattr(child, "label", "") in ("Archive", "Unarchive"):
-                    if hasattr(child, "text"):
-                        child.text = target_desc
-                    if hasattr(child, "update"):
-                        child.update(target_desc)
-                    child.refresh()
+            # Directly update FooterKey child widget descriptions
+            from textual.widgets._footer import FooterKey
+            for fk in self.query(FooterKey):
+                if fk.action == "archive_selected" or fk.key == "a":
+                    fk.description = target_desc
+                    fk.refresh()
 
             self.screen.bindings_updated_signal.publish(self.screen)
         except Exception:

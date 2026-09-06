@@ -461,7 +461,7 @@ class JulesTUIApp(App):
         color: #eab308;
     }
 
-    FooterKey, FooterLabel {
+    FooterKey, FooterLabel, FooterKey .footer-key--key, FooterKey .footer-key--description {
         background: transparent;
     }
 

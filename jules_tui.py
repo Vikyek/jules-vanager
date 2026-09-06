@@ -431,16 +431,12 @@ class JulesTUIApp(App):
     }
 
     ListItem {
+        layout: horizontal;
         padding: 0 1;
         height: auto;
         color: #eab308;
         background: #0a0a0a;
         border-bottom: dashed #334155;
-    }
-
-    .item-layout {
-        height: auto;
-        layout: horizontal;
     }
 
     ListItem:focus, ListItem.--highlight {
@@ -450,10 +446,9 @@ class JulesTUIApp(App):
         border-bottom: none;
     }
 
-    ListItem:focus .item-badge, ListItem.--highlight .item-badge,
-    ListItem:focus .item-title, ListItem.--highlight .item-title {
-        color: #000000 !important;
-        background: #eab308 !important;
+    ListItem:focus Label, ListItem.--highlight Label {
+        color: #000000;
+        background: #eab308;
         text-style: bold;
     }
 
@@ -466,22 +461,22 @@ class JulesTUIApp(App):
         width: 1fr;
     }
 
-    ListItem .item-badge.state-success {
+    .state-success {
         color: #22c55e;
         text-style: bold;
     }
 
-    ListItem .item-badge.state-error {
+    .state-error {
         color: #ef4444;
         text-style: bold;
     }
 
-    ListItem .item-badge.state-active {
+    .state-active {
         color: #f59e0b;
         text-style: bold;
     }
 
-    ListItem .item-badge.state-neutral {
+    .state-neutral {
         color: #71717a;
     }
 

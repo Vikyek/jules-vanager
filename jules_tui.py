@@ -429,12 +429,16 @@ class JulesTUIApp(App):
         return True, label
 
     CSS = """
+    $surface: transparent;
+    $background: transparent;
+    $panel: transparent;
+
     * {
-        background: transparent;
+        background: transparent !important;
     }
 
-    Screen {
-        background: transparent;
+    Screen, ModalScreen, App {
+        background: transparent !important;
         color: #eab308;
     }
 
@@ -442,14 +446,14 @@ class JulesTUIApp(App):
         dock: top;
         height: auto;
         width: 100%;
-        background: transparent;
+        background: transparent !important;
     }
 
     #top-header {
         height: 1;
         width: 100%;
-        background: #eab308;
-        color: #000000;
+        background: #eab308 !important;
+        color: #000000 !important;
         text-align: center;
         text-style: bold;
     }
@@ -457,19 +461,19 @@ class JulesTUIApp(App):
     Footer {
         dock: bottom;
         height: 1;
-        background: transparent;
+        background: transparent !important;
         color: #eab308;
     }
 
     FooterKey, FooterLabel, FooterKey .footer-key--key, FooterKey .footer-key--description {
-        background: transparent;
+        background: transparent !important;
     }
 
     #status-bar {
         height: auto;
         min-height: 1;
         width: 100%;
-        background: transparent;
+        background: transparent !important;
         color: #facc15;
         text-style: bold;
         text-align: center;
@@ -480,24 +484,24 @@ class JulesTUIApp(App):
         width: 45%;
         border-right: solid #eab308;
         height: 100%;
-        background: transparent;
+        background: transparent !important;
     }
 
     #right-pane {
         width: 55%;
         height: 100%;
         padding: 1 2;
-        background: transparent;
+        background: transparent !important;
         color: #06b6d4;
     }
 
-    Container, ScrollableContainer, ListView, ListItem, Static, Markdown, MarkdownBlock, MarkdownHeader, MarkdownParagraph, MarkdownUnorderedList, MarkdownOrderedList, MarkdownListItem, MarkdownFence, MarkdownCodeBlock, Label {
-        background: transparent;
+    Container, ScrollableContainer, ListView, ListItem, Static, Markdown, MarkdownBlock, MarkdownHeader, MarkdownParagraph, MarkdownUnorderedList, MarkdownOrderedList, MarkdownListItem, MarkdownFence, MarkdownCodeBlock, MarkdownTable, MarkdownTableCell, MarkdownTableTitle, Label, Input, Button {
+        background: transparent !important;
     }
 
     ListView {
         height: 100%;
-        background: transparent;
+        background: transparent !important;
         border: none;
     }
 
@@ -505,22 +509,23 @@ class JulesTUIApp(App):
         padding: 0 1;
         height: auto;
         color: #eab308;
-        background: transparent;
+        background: transparent !important;
         border-bottom: none;
     }
 
     #item-static {
         width: 100%;
+        background: transparent !important;
     }
 
     ListItem:focus, ListItem.--highlight {
-        background: #eab308;
-        color: #000000;
+        background: #eab308 !important;
+        color: #000000 !important;
     }
 
     ListItem:focus Static, ListItem.--highlight Static {
-        background: #eab308;
-        color: #000000;
+        background: #eab308 !important;
+        color: #000000 !important;
     }
 
     .state-success {

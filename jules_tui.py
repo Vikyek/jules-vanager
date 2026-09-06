@@ -15,6 +15,8 @@ import pathlib
 import signal
 from typing import List, Dict, Any, Optional, Tuple
 
+# Note: The curses draw_menu loop has been fully replaced by this Textual implementation.
+# Transient curses exceptions are no longer applicable in this architecture.
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical, ScrollableContainer, VerticalScroll

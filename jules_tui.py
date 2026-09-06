@@ -664,14 +664,27 @@ class JulesTUIApp(App):
         self.update_status("Refreshing sessions...")
         self.fetch_data_worker()
 
+    def check_action_archive_selected(self) -> Optional[bool]:
+        """Returns action availability and dynamic footer text."""
+        return True
+
+    def get_key_display(self, key: str) -> Optional[str]:
+        return super().get_key_display(key)
+
     def update_footer_bindings(self) -> None:
         try:
+            target_desc = "Unarchive" if self.show_archived else "Archive"
+            # Update app & screen level bindings
+            for screen in [self.screen, self]:
+                if hasattr(screen, "_bindings") and hasattr(screen._bindings, "bindings"):
+                    for binding in screen._bindings.bindings.values():
+                        if getattr(binding, "key", "") == "a":
+                            binding.description = target_desc
+
+            # Replace footer widget so textual recalculates visible keybind labels
             footer = self.query_one(Footer)
-            # Dynamically update description for binding 'a'
-            for binding in self._bindings.bindings.values():
-                if binding.key == "a":
-                    binding.description = "Unarchive" if self.show_archived else "Archive"
-            footer.refresh(layout=True)
+            footer.remove()
+            self.mount(Footer())
         except Exception:
             pass
 

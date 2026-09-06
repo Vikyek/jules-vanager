@@ -649,7 +649,7 @@ class JulesTUIApp(App):
         color: #facc15;
         text-style: bold;
         text-align: center;
-        border-bottom: solid #eab308;
+        border-bottom: none;
     }
 
     #left-pane {

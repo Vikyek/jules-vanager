@@ -77,6 +77,33 @@ _cp = cached_property(_patched_style_rich_style)
 _cp.__set_name__(Style, "rich_style")
 Style.rich_style = _cp
 
+def _patched_style_rich_style_with_offset(self, x: int, y: int) -> RichStyle:
+    (
+        background, foreground, bold, dim, italic,
+        underline, underline2, reverse, strike, blink,
+        link, _meta
+    ) = _get_simple_attrs(self)
+
+    color = None if foreground is None else background + foreground
+    bg_rich = None if (background is None or background.a == 0) else background.rich_color
+
+    return RichStyle(
+        color=None if color is None else color.rich_color,
+        bgcolor=bg_rich,
+        bold=bold,
+        dim=dim,
+        italic=italic,
+        underline=underline,
+        underline2=underline2,
+        reverse=reverse,
+        strike=strike,
+        blink=blink,
+        link=link,
+        meta={**self.meta, "offset": (x, y)},
+    )
+
+Style.rich_style_with_offset = _patched_style_rich_style_with_offset
+
 TRANSPARENT_THEME = Theme(
     name="transparent-theme",
     primary="#eab308",
@@ -617,7 +644,8 @@ class JulesTUIApp(App):
         height: auto;
         min-height: 1;
         width: 100%;
-        background: transparent !important;
+        background: #000000 !important;
+        background-tint: transparent !important;
         color: #facc15;
         text-style: bold;
         text-align: center;

@@ -237,18 +237,25 @@ class SessionItem(ListItem):
         from rich.text import Text
         txt = Text()
 
-        if is_focused:
-            txt.append(f"[{state}] {title}", style="bold #000000 on #eab308")
+        state_bg = "#eab308"
+        if state in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
+            badge_style = "bold #22c55e"
+            state_bg = "#15803d"
+        elif "FAIL" in state or "CONFLICT" in state or "REJECTED" in state:
+            badge_style = "bold #ef4444"
+            state_bg = "#b91c1c"
+        elif "AWAITING" in state or "IN_PROGRESS" in state or "RUNNING" in state:
+            badge_style = "bold #f59e0b"
+            state_bg = "#854d0e"
         else:
-            if state in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
-                badge_style = "bold #22c55e"
-            elif "FAIL" in state or "CONFLICT" in state or "REJECTED" in state:
-                badge_style = "bold #ef4444"
-            elif "AWAITING" in state or "IN_PROGRESS" in state or "RUNNING" in state:
-                badge_style = "bold #f59e0b"
-            else:
-                badge_style = "#71717a"
+            badge_style = "#71717a"
+            state_bg = "#3f3f46"
 
+        if is_focused:
+            self.styles.background = state_bg
+            txt.append(f"[{state}] {title}", style=f"bold #ffffff on {state_bg}")
+        else:
+            self.styles.background = "#0a0a0a"
             txt.append(f"[{state}]", style=badge_style)
             txt.append(f" {title}", style="#eab308")
 

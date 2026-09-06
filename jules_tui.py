@@ -85,6 +85,13 @@ def toggle_systemd_autostart() -> str:
         subprocess.run(["systemctl", "--user", "enable", "jules-listener.service"], capture_output=True, text=True)
         return "Enabled system autostart for listener service."
 
+def is_listener_service_active() -> bool:
+    try:
+        check = subprocess.run(["systemctl", "--user", "is-active", "jules-listener.service"], capture_output=True, text=True)
+        return check.stdout.strip() == "active"
+    except Exception:
+        return False
+
 _SESSION_PR_STATUS_CACHE = {}
 _SESSION_PR_STATUS_CACHE_TIME = {}
 
@@ -517,8 +524,15 @@ class JulesTUIApp(App):
     def animate_status_bar(self) -> None:
         try:
             bar = self.query_one("#status-bar", Static)
-            spinner = self.spinner_frames[self.spinner_idx % len(self.spinner_frames)]
-            self.spinner_idx += 1
+            is_active_op = any(kw in self.status_msg.lower() for kw in ("fetching", "refreshing", "sending", "archiving", "syncing"))
+            service_active = is_listener_service_active()
+            
+            if is_active_op or service_active:
+                spinner = self.spinner_frames[self.spinner_idx % len(self.spinner_frames)]
+                self.spinner_idx += 1
+            else:
+                spinner = "●" if service_active else "○"
+
             bar.update(f" {spinner} Mode: [{self.filter_mode}] | {self.status_msg}")
         except Exception:
             pass

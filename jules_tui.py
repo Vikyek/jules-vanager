@@ -506,6 +506,10 @@ class JulesTUIApp(App):
             body_md = f"### Session Overview\n- **ID:** `{sid}`\n- **State:** `{state}`\n- **Prompt:** {s.get('prompt', 'N/A')}\n"
             content.update(body_md)
 
+    def on_list_view_selected(self, event: ListView.Selected) -> None:
+        if isinstance(event.item, SessionItem):
+            self.action_inspect_reply()
+
     def action_refresh_sessions(self) -> None:
         self.update_status("Refreshing sessions...")
         self.fetch_data_worker()

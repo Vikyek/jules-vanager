@@ -318,6 +318,14 @@ def check_jules_api_queries():
                     generated_answer = res.stdout.strip()
                     
                     # Clean up output markdown if present
+                    if generated_answer.startswith("```"):
+                        lines = generated_answer.split("\n")
+                        if lines[-1].startswith("```"):
+                            lines = lines[1:-1]
+                        else:
+                            lines = lines[1:]
+                        generated_answer = "\n".join(lines).strip()
+
                     if "```" in generated_answer:
                         generated_answer = generated_answer.split("```")[0].strip()
                     
@@ -331,6 +339,11 @@ def check_jules_api_queries():
                             br_name = src_ctx.get("githubRepoContext", {}).get("startingBranch", "main")
                             log_action(session_id, "AGY_REPLY", generated_answer, title=clean_t, repo=rep_name, branch=br_name, action_by="auto", query=query_text[:200])
                             continue
+                    else:
+                        err_msg = res.stderr.strip() if res.stderr else "Empty output"
+                        print(f"⚠️ [Jules Listener] AGY subagent returned non-zero ({res.returncode}) or empty output. Error: {err_msg}")
+                except subprocess.TimeoutExpired as e:
+                    print(f"⚠️ [Jules Listener] AGY subagent resolution timed out after {e.timeout}s.")
                 except Exception as e:
                     print(f"⚠️ [Jules Listener] AGY subagent resolution failed: {e}")
 

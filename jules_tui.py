@@ -270,12 +270,6 @@ def get_unassigned_jules_prs(active_sessions):
         repo_name, repo_path = item
         items = []
         try:
-            # Fast check: skip gh invocation if repo git branches/refs contain no jules keywords
-            git_branches = subprocess.run(["git", "branch", "-a"], cwd=repo_path, capture_output=True, text=True, timeout=1)
-            if git_branches.returncode == 0 and "jules" not in git_branches.stdout.lower():
-                # Also check git log recent branch heads if main/master
-                return items
-
             res = subprocess.run(["gh", "pr", "list", "--state", "open", "--json", "number,title,headRefName,url,mergeable,statusCheckRollup,comments,reviews"], cwd=repo_path, capture_output=True, text=True, timeout=2)
             if res.returncode == 0:
                 prs = json.loads(res.stdout)

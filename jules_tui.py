@@ -415,23 +415,48 @@ class SessionItem(ListItem):
         from rich.text import Text
         txt = Text()
 
-        display_badge = f"[{spinner_char} ANSWERING]" if is_answering else f"[{state}]"
+        badge_icon = ""
+        badge_text = state
+        badge_style = "#71717a"
+
+        if is_answering:
+            badge_text = f"{spinner_char} ANSWERING"
+            badge_style = "bold #38bdf8"
+        elif state == "UNASSIGNED_PR":
+            badge_icon = "🐙 "
+            badge_text = "UNASSIGNED PR"
+            badge_style = "bold #c084fc"
+        elif state in ("UNSTUCK_PROMPT", "UNSTUCK"):
+            badge_icon = "⚡ "
+            badge_text = "UNSTUCK NUDGE"
+            badge_style = "bold #f97316"
+        elif state == "AGY_DISPATCH":
+            badge_icon = "🤖 "
+            badge_text = "AGY TAKEOVER"
+            badge_style = "bold #ec4899"
+        elif "AWAITING" in state or state in ("PAUSED", "AWAITING_INPUT"):
+            badge_icon = "❓ "
+            badge_text = "AWAITING INPUT" if state == "AWAITING_USER_FEEDBACK" else state
+            badge_style = "bold #f59e0b"
+        elif state in ("IN_PROGRESS", "RUNNING"):
+            badge_icon = "⚙️ "
+            badge_text = "RUNNING"
+            badge_style = "bold #3b82f6"
+        elif state in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
+            badge_icon = "✔ "
+            badge_text = "COMPLETED"
+            badge_style = "bold #22c55e"
+        elif "FAIL" in state or "CONFLICT" in state or "REJECTED" in state or "ERROR" in state:
+            badge_icon = "✖ "
+            badge_text = "FAILED" if state == "FAILED" else state
+            badge_style = "bold #ef4444"
+
+        display_badge = f"[{badge_icon}{badge_text}]"
 
         if is_focused:
             time_suffix = f" ({archive_time})" if archive_time and (state in ("ARCHIVED", "CLOSED") or getattr(self.app, "show_archived", False)) else ""
             txt.append(f"{display_badge} {title}{time_suffix}", style="bold #000000 on #eab308")
         else:
-            if is_answering:
-                badge_style = "bold #38bdf8"
-            elif state in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
-                badge_style = "bold #22c55e"
-            elif "FAIL" in state or "CONFLICT" in state or "REJECTED" in state:
-                badge_style = "bold #ef4444"
-            elif "AWAITING" in state or "IN_PROGRESS" in state or "RUNNING" in state:
-                badge_style = "bold #f59e0b"
-            else:
-                badge_style = "#71717a"
-
             txt.append(display_badge, style=badge_style)
             txt.append(f" {title}", style="#eab308")
             if archive_time and (state in ("ARCHIVED", "CLOSED") or getattr(self.app, "show_archived", False)):

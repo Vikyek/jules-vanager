@@ -669,14 +669,9 @@ class JulesTUIApp(App):
 
 
 def main() -> None:
-    # Auto-kill prior jules_tui instances and their Kitty windows without confirmation prompts
+    # Auto-kill prior jules_tui instances silently without confirmation prompts
     current_pid = os.getpid()
     try:
-        # Close old i3 Kitty windows with jules-tui title
-        socket_paths = glob.glob("/run/user/1001/i3/ipc-socket.*")
-        for soc in socket_paths:
-            subprocess.run(["i3-msg", "--socket", soc, "[title=\"jules-tui\"]", "kill"], capture_output=True)
-
         res = subprocess.run(["pgrep", "-f", "jules_tui"], capture_output=True, text=True)
         if res.returncode == 0:
             for line in res.stdout.strip().splitlines():

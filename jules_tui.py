@@ -217,18 +217,20 @@ class SessionItem(ListItem):
         if len(title) > 60:
             title = title[:57] + "..."
 
-        badge = f"[{state}]"
         if state in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
-            badge_class = "state-success"
+            badge_style = "bold #22c55e"
         elif "FAIL" in state or "CONFLICT" in state or "REJECTED" in state:
-            badge_class = "state-error"
+            badge_style = "bold #ef4444"
         elif "AWAITING" in state or "IN_PROGRESS" in state or "RUNNING" in state:
-            badge_class = "state-active"
+            badge_style = "bold #f59e0b"
         else:
-            badge_class = "state-neutral"
+            badge_style = "#71717a"
 
-        yield Label(badge, classes=f"item-badge {badge_class}")
-        yield Label(f" {title}", classes="item-title")
+        from rich.text import Text
+        txt = Text()
+        txt.append(f"[{state}]", style=badge_style)
+        txt.append(f" {title}")
+        yield Static(txt, classes="session-item-label")
 
 
 class ReplyModalScreen(ModalScreen[Optional[str]]):
@@ -431,12 +433,16 @@ class JulesTUIApp(App):
     }
 
     ListItem {
-        layout: horizontal;
         padding: 0 1;
         height: auto;
         color: #eab308;
         background: #0a0a0a;
         border-bottom: dashed #334155;
+    }
+
+    .session-item-label {
+        width: 100%;
+        color: #eab308;
     }
 
     ListItem:focus, ListItem.--highlight {
@@ -446,19 +452,10 @@ class JulesTUIApp(App):
         border-bottom: none;
     }
 
-    ListItem:focus Label, ListItem.--highlight Label {
-        color: #000000;
+    ListItem:focus .session-item-label, ListItem.--highlight .session-item-label {
         background: #eab308;
+        color: #000000;
         text-style: bold;
-    }
-
-    .item-badge {
-        width: auto;
-        margin-right: 1;
-    }
-
-    .item-title {
-        width: 1fr;
     }
 
     .state-success {

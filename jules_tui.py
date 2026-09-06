@@ -410,6 +410,8 @@ class JulesTUIApp(App):
     TITLE = "Jules Vanager TUI"
     SUB_TITLE = "Google Jules API & Listener Management"
     
+    theme = "ansi-dark"
+    
     BINDINGS = [
         Binding("r", "refresh_sessions", "Refresh", show=True),
         Binding("a", "archive_selected", "Archive", show=True),

@@ -212,23 +212,50 @@ class SessionItem(ListItem):
         self.sid = session.get("id") or session.get("name", "").split("/")[-1]
 
     def compose(self) -> ComposeResult:
+        yield Static("", id="item-static")
+
+    def on_mount(self) -> None:
+        self.update_rendering()
+
+    def watch_has_focus(self, value: bool) -> None:
+        self.update_rendering()
+
+    def update_rendering(self) -> None:
         state = self.session.get("state", "UNKNOWN")
         title = self.session.get("title") or self.session.get("prompt") or f"Session {self.sid}"
         if len(title) > 60:
             title = title[:57] + "..."
 
-        badge = f"[{state}]"
-        if state in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
-            badge_class = "state-success"
-        elif "FAIL" in state or "CONFLICT" in state or "REJECTED" in state:
-            badge_class = "state-error"
-        elif "AWAITING" in state or "IN_PROGRESS" in state or "RUNNING" in state:
-            badge_class = "state-active"
-        else:
-            badge_class = "state-neutral"
+        is_focused = False
+        try:
+            list_view = self.app.query_one("#session-list", ListView)
+            if list_view.highlighted_child is self:
+                is_focused = True
+        except Exception:
+            pass
 
-        yield Label(badge, id="item-badge", classes=badge_class)
-        yield Label(f" {title}", id="item-title")
+        from rich.text import Text
+        txt = Text()
+
+        if is_focused:
+            txt.append(f"[{state}] {title}", style="bold #000000 on #eab308")
+        else:
+            if state in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
+                badge_style = "bold #22c55e"
+            elif "FAIL" in state or "CONFLICT" in state or "REJECTED" in state:
+                badge_style = "bold #ef4444"
+            elif "AWAITING" in state or "IN_PROGRESS" in state or "RUNNING" in state:
+                badge_style = "bold #f59e0b"
+            else:
+                badge_style = "#71717a"
+
+            txt.append(f"[{state}]", style=badge_style)
+            txt.append(f" {title}", style="#eab308")
+
+        try:
+            self.query_one("#item-static", Static).update(txt)
+        except Exception:
+            pass
 
 
 class ReplyModalScreen(ModalScreen[Optional[str]]):
@@ -431,7 +458,6 @@ class JulesTUIApp(App):
     }
 
     ListItem {
-        layout: horizontal;
         padding: 0 1;
         height: auto;
         color: #eab308;
@@ -439,19 +465,13 @@ class JulesTUIApp(App):
         border-bottom: dashed #334155;
     }
 
-    #item-badge {
-        width: auto;
-    }
-
-    #item-title {
-        width: 1fr;
-        color: #eab308;
+    #item-static {
+        width: 100%;
     }
 
     ListItem:focus, ListItem.--highlight {
         background: #eab308;
         color: #000000;
-        text-style: bold;
         border-bottom: none;
     }
 

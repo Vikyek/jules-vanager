@@ -467,7 +467,8 @@ class JulesTUIApp(App):
 
     ListItem {
         padding: 0 1;
-        height: auto;
+        height: 1;
+        margin: 0;
         color: #eab308;
         background: #0a0a0a;
         border-bottom: dashed #334155;
@@ -475,6 +476,7 @@ class JulesTUIApp(App):
 
     .session-item-label {
         width: 100%;
+        height: 1;
         color: #eab308;
     }
 
@@ -482,7 +484,7 @@ class JulesTUIApp(App):
         background: #eab308 !important;
         color: #000000 !important;
         text-style: bold;
-        border-bottom: dashed #eab308;
+        border-bottom: none;
     }
 
     ListItem:focus .session-item-label, ListItem.--highlight .session-item-label, ListItem.--highlight-active .session-item-label {

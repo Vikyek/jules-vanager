@@ -478,7 +478,50 @@ def check_and_handle_jules_prs(repo_path):
                 "merged": merged
             })
             
-    return jules_handled
+def auto_spawn_suggestions_queue():
+    """
+    Automated improvement loop:
+    Checks if active sessions count is low (< 3).
+    If so, fetches the top available suggestion from queue, starts a new Jules session for it, and dismisses it.
+    """
+    res = list_sessions()
+    if not isinstance(res, dict) or "error" in res:
+        return None
+
+    active_sessions = [s for s in res.get("sessions", []) if s.get("state") not in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED", "CLOSED", "FAILED")]
+    if len(active_sessions) >= 3:
+        return None
+
+    try:
+        from jules_scraper import fetch_jules_suggestions, dismiss_suggestion
+        from jules_manager import start_session_workflow
+        sugs = fetch_jules_suggestions()
+        if not sugs:
+            return None
+
+        # Pick top pending suggestion
+        top_sug = sugs[0]
+        title = top_sug.get("title", "").strip()
+        repo = top_sug.get("repo", "paru-wrapper")
+        prompt = top_sug.get("details") or title
+        clean_repo = repo.replace("Vikyek/", "")
+
+        if not title:
+            return None
+
+        print(f"🚀 [Jules Listener Auto-Queue] Continuous improvement spawn: Starting suggestion '{title[:50]}' for {clean_repo}...")
+        dismiss_suggestion(title)
+        
+        spawn_res = start_session_workflow(clean_repo, prompt)
+        if isinstance(spawn_res, dict) and ("id" in spawn_res or "name" in spawn_res):
+            sid = spawn_res.get("id") or spawn_res.get("name", "").split("/")[-1]
+            print(f"✅ [Jules Listener Auto-Queue] Successfully spawned session {sid} for suggestion: '{title[:50]}'")
+            return sid
+        else:
+            print(f"⚠️ [Jules Listener Auto-Queue] Failed to spawn suggestion session: {spawn_res.get('error', 'Unknown')}")
+    except Exception as e:
+        print(f"❌ [Jules Listener Auto-Queue] Error in auto-spawn: {e}")
+    return None
 
 def run_pass():
     mode = load_config_mode()
@@ -530,6 +573,9 @@ def run_pass():
 
     archived = auto_archive_completed_sessions()
 
+    # Continuous improvement loop: auto-start suggestions queue if active session load is low (< 3)
+    spawned_sid = auto_spawn_suggestions_queue()
+
     # Save live status JSON for HUD
     save_status({
         "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -537,6 +583,7 @@ def run_pass():
         "pending_queries_count": len(queries),
         "handled_prs_count": len(all_handled),
         "archived_count": archived,
+        "auto_spawned_session": spawned_sid,
         "queries": [{"session_id": q["session_id"], "state": q["state"], "prompt": q["prompt"][:80]} for q in queries],
         "prs": all_handled
     })

@@ -220,19 +220,31 @@ class SessionItem(ListItem):
     def watch_has_focus(self, value: bool) -> None:
         self.update_rendering()
 
+    def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
+        self.update_rendering()
+
     def update_rendering(self) -> None:
         state = self.session.get("state", "UNKNOWN")
         title = self.session.get("title") or self.session.get("prompt") or f"Session {self.sid}"
         if len(title) > 60:
             title = title[:57] + "..."
 
-        is_focused = self.has_focus or self.has_class("--highlight")
+        parent_list = self.ancestors
+        is_highlighted = False
+        try:
+            list_view = self.app.query_one("#session-list", ListView)
+            if list_view.highlighted_child is self:
+                is_highlighted = True
+        except Exception:
+            pass
+
+        is_focused = self.has_focus or is_highlighted or self.has_class("--highlight")
 
         from rich.text import Text
         txt = Text()
 
         if is_focused:
-            txt.append(f"[{state}] {title}", style="bold black on #eab308")
+            txt.append(f"[{state}] {title}", style="bold #000000 on #eab308")
         else:
             if state in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED"):
                 badge_style = "bold #22c55e"

@@ -7,6 +7,7 @@ Tests keybindings, list navigation, filter cycling, and modal screen rendering n
 import unittest
 import asyncio
 from jules_tui import JulesTUIApp, ReplyModalScreen, SessionItem
+from textual.widgets import TextArea
 
 class TestJulesTUIApp(unittest.IsolatedAsyncioTestCase):
 
@@ -78,6 +79,27 @@ class TestJulesTUIApp(unittest.IsolatedAsyncioTestCase):
 
             # Verify return to main screen
             self.assertFalse(isinstance(app.screen, ReplyModalScreen))
+
+    async def test_reply_modal_multiline_submission(self):
+        app = JulesTUIApp()
+        async with app.run_test() as pilot:
+            result_container = []
+            modal = ReplyModalScreen("test-session-123", "Fix auth middleware bug", question="Details?")
+            app.push_screen(modal, callback=lambda val: result_container.append(val))
+            await pilot.pause()
+
+            # Verify TextArea present and focused
+            text_area = modal.query_one(TextArea)
+            self.assertIsNotNone(text_area)
+            self.assertEqual(modal.focused, text_area)
+
+            # Insert multiline text
+            text_area.text = "First line of reply\nSecond line with code\nThird line done"
+            modal.action_submit_reply()
+            await pilot.pause()
+
+            # Verify callback received multiline text
+            self.assertEqual(result_container, ["First line of reply\nSecond line with code\nThird line done"])
 
     async def test_answering_badge_and_state(self):
         app = JulesTUIApp()

@@ -19,17 +19,39 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical, ScrollableContainer, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Header, Footer, Static, ListView, ListItem, Label, Input, Button, Markdown
+from textual.widgets import Header, Footer, Static, ListView, ListItem, Label, Input, Button, Markdown, TextArea
 from textual.worker import Worker, WorkerState
 from textual.reactive import reactive
-from textual import work
+from textual import work, events
 import operator
 from functools import cached_property
 from textual.visual import Style
 from textual.color import Color
 from textual.renderables.blank import Blank
 from rich.style import Style as RichStyle
+import rich.color
+import textual.filter
 from textual.theme import Theme
+
+# Compatibility patch: Allow rich to parse textual Color instances (e.g. for TextArea fallback styling)
+_orig_rich_color_parse = rich.color.Color.parse
+
+def _patched_rich_color_parse(color: Any) -> rich.color.Color:
+    if isinstance(color, Color):
+        return color.rich_color
+    return _orig_rich_color_parse(color)
+
+rich.color.Color.parse = _patched_rich_color_parse
+
+# Compatibility patch: Prevent monochrome filter crash when Segment style is None
+_orig_monochrome_style = textual.filter.monochrome_style
+
+def _patched_monochrome_style(style: Any) -> RichStyle:
+    if style is None:
+        return RichStyle()
+    return _orig_monochrome_style(style)
+
+textual.filter.monochrome_style = _patched_monochrome_style
 
 # Force Textual Blank renderable to be transparent when color is transparent
 def _patched_blank_init(self, color: Color | str = "transparent") -> None:
@@ -413,6 +435,9 @@ class ReplyModalScreen(ModalScreen[Optional[str]]):
     """Modal screen for sending prompt responses to an active session."""
     BINDINGS = [
         Binding("escape", "dismiss_modal", "Cancel", show=True),
+        Binding("ctrl+s", "submit_reply", "Submit", show=True),
+        Binding("ctrl+j", "submit_reply", "Submit", show=False),
+        Binding("ctrl+enter", "submit_reply", "Submit", show=False),
         Binding("pageup", "scroll_up", "Scroll Up", show=False),
         Binding("pagedown", "scroll_down", "Scroll Down", show=False),
         Binding("shift+up", "scroll_up", "Scroll Up", show=False),
@@ -464,7 +489,7 @@ class ReplyModalScreen(ModalScreen[Optional[str]]):
 
     #dialog-scroll {
         height: auto;
-        max-height: 16;
+        max-height: 14;
         min-height: 3;
         overflow-y: auto;
         margin-bottom: 1;
@@ -479,10 +504,22 @@ class ReplyModalScreen(ModalScreen[Optional[str]]):
         width: 100%;
     }
 
-    Input, Input:focus, Input.--cursor {
+    #reply-input {
         margin: 1 0;
+        height: 7;
+        min-height: 4;
+        max-height: 12;
         background: transparent !important;
         border: tall #eab308;
+    }
+
+    TextArea, TextArea:focus, TextArea .text-area--cursor-line, TextArea .text-area--cursor-gutter {
+        background: transparent !important;
+        color: #facc15;
+    }
+
+    TextArea .text-area--placeholder {
+        color: #71717a;
     }
 
     #buttons {
@@ -513,13 +550,19 @@ class ReplyModalScreen(ModalScreen[Optional[str]]):
                 yield Label(f"🤖 Reply to Session [{self.session_id}]", id="dialog-title")
                 with VerticalScroll(id="dialog-scroll"):
                     yield Static(f"Prompt:\n\n{self.prompt_text}", id="dialog-prompt")
-            yield Input(placeholder="Type message reply (or press Enter to Submit)...", id="reply-input")
+            yield TextArea(
+                id="reply-input",
+                show_line_numbers=False,
+                soft_wrap=True,
+                tab_behavior="focus",
+                placeholder="Type multiline message reply...\n[Ctrl+Enter / Ctrl+S] to submit, [Esc] to cancel"
+            )
             with Horizontal(id="buttons"):
                 yield Button("Cancel [Esc]", variant="error", id="cancel")
-                yield Button("Submit [Enter]", variant="primary", id="submit")
+                yield Button("Submit [Ctrl+Enter]", variant="primary", id="submit")
 
     def on_mount(self) -> None:
-        self.query_one(Input).focus()
+        self.query_one(TextArea).focus()
 
     def action_dismiss_modal(self) -> None:
         self.dismiss(None)
@@ -536,16 +579,24 @@ class ReplyModalScreen(ModalScreen[Optional[str]]):
         except Exception:
             pass
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "submit":
-            val = self.query_one(Input).value.strip()
+    def action_submit_reply(self) -> None:
+        try:
+            val = self.query_one(TextArea).text.strip()
             self.dismiss(val if val else None)
-        else:
+        except Exception:
             self.dismiss(None)
 
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        val = event.value.strip()
-        self.dismiss(val if val else None)
+    def on_key(self, event: events.Key) -> None:
+        if event.key in ("ctrl+enter", "ctrl+j", "ctrl+s"):
+            event.stop()
+            event.prevent_default()
+            self.action_submit_reply()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "submit":
+            self.action_submit_reply()
+        else:
+            self.dismiss(None)
 
 class ConfirmModalScreen(ModalScreen[bool]):
     """Modal screen for action confirmation prompts."""
@@ -742,7 +793,11 @@ class JulesTUIApp(App):
         color: #06b6d4;
     }
 
-    Container, ScrollableContainer, Vertical, Horizontal, ListView, ListItem, Static, Label, Input, Button, Header, Footer, FooterKey, FooterLabel, Markdown, MarkdownBlock, MarkdownHeader, MarkdownParagraph, MarkdownUnorderedList, MarkdownOrderedList, MarkdownListItem, MarkdownFence, MarkdownCodeBlock, MarkdownTable, MarkdownTableCell, MarkdownTableTitle, ScrollBar, ScrollBarCorner, ScrollbarHandle, ScrollBarHandle, ScrollBarGrip {
+    Container, ScrollableContainer, Vertical, Horizontal, ListView, ListItem, Static, Label, Input, Button, Header, Footer, FooterKey, FooterLabel, Markdown, MarkdownBlock, MarkdownHeader, MarkdownParagraph, MarkdownUnorderedList, MarkdownOrderedList, MarkdownListItem, MarkdownFence, MarkdownCodeBlock, MarkdownTable, MarkdownTableCell, MarkdownTableTitle, ScrollBar, ScrollBarCorner, ScrollbarHandle, ScrollBarHandle, ScrollBarGrip, TextArea {
+        background: transparent !important;
+    }
+
+    TextArea, TextArea:focus, TextArea .text-area--cursor-line, TextArea .text-area--cursor-gutter {
         background: transparent !important;
     }
 

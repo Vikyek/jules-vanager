@@ -2,9 +2,9 @@ name: AUR Package CI/CD
 
 on:
   push:
-    branches: ["**"]
     tags: ["v*.*.*"]
   pull_request:
+    tags: ["v*.*.*"]
 
 jobs:
   build-and-verify:

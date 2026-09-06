@@ -143,6 +143,7 @@ def fetch_sourcery_pr_suggestions():
 
     # Fallback to local git repository commit history for code health refactor logs if API is rate limited or timed out
     if not suggestions:
+        seen_details = set()
         for clean_repo in ["paru-wrapper", "jules-vanager"]:
             repo_dir = os.path.expanduser(f"~/Projects/{clean_repo}")
             if os.path.exists(os.path.join(repo_dir, ".git")):
@@ -150,19 +151,22 @@ def fetch_sourcery_pr_suggestions():
                     g_res = subprocess.run(["git", "log", "-n", "50", "--oneline"], cwd=repo_dir, capture_output=True, text=True, timeout=2)
                     if g_res.returncode == 0:
                         for line in g_res.stdout.splitlines():
-                            if any(k in line.lower() for k in ["refactor", "health", "exception", "security", "perf", "merge pull request"]):
+                            if any(k in line.lower() for k in ["refactor", "health", "exception", "security", "perf"]) and "merge pull request" not in line.lower() and "merge branch" not in line.lower():
                                 parts = line.strip().split(" ", 1)
                                 if len(parts) == 2:
                                     c_hash, c_msg = parts
-                                    stitle = f"Code Health ({c_hash}): {c_msg[:60]}"
-                                    if stitle not in seen_titles:
-                                        seen_titles.add(stitle)
-                                        suggestions.append({
-                                            "title": stitle,
-                                            "details": f"Code health recommendation: {c_msg}",
-                                            "repo": f"Vikyek/{clean_repo}",
-                                            "source": "git_commit_log"
-                                        })
+                                    norm_msg = c_msg.strip().lower()
+                                    if norm_msg not in seen_details:
+                                        seen_details.add(norm_msg)
+                                        stitle = f"Code Health ({c_hash}): {c_msg[:60]}"
+                                        if stitle not in seen_titles:
+                                            seen_titles.add(stitle)
+                                            suggestions.append({
+                                                "title": stitle,
+                                                "details": f"Code health recommendation: {c_msg}",
+                                                "repo": f"Vikyek/{clean_repo}",
+                                                "source": "git_commit_log"
+                                            })
                 except Exception:
                     pass
 
@@ -311,11 +315,34 @@ def fetch_jules_suggestions(raw_html_snippet=None, filter_dismissed=True):
 
     # Load all stored historical suggestions from disk to ensure persistence across reruns
     all_stored = load_persistent_suggestions()
-    combined_map = {s.get("title", "").strip(): s for s in (all_stored + valid_scraped) if isinstance(s, dict) and s.get("title")}
+    combined = all_stored + valid_scraped
+    
+    seen_norm = set()
+    deduped_suggestions = []
+    for s in combined:
+        if not isinstance(s, dict):
+            continue
+        title = s.get("title", "").strip()
+        details = s.get("details", "").strip()
+        if not title:
+            continue
+        norm_key = (details or title).lower()
+        if norm_key not in seen_norm:
+            seen_norm.add(norm_key)
+            deduped_suggestions.append(s)
+
     final_suggestions = [
-        s for s in combined_map.values()
+        s for s in deduped_suggestions
         if not any(p in (s.get("title", "") + " " + s.get("details", "")).lower() for p in feedback_phrases)
     ]
+
+    # Save cleaned, deduplicated list back to disk
+    try:
+        os.makedirs(os.path.dirname(SCANNED_SUGGESTIONS_FILE), exist_ok=True)
+        with open(SCANNED_SUGGESTIONS_FILE, "w") as f:
+            json.dump(final_suggestions, f, indent=2)
+    except Exception:
+        pass
 
     return [s for s in final_suggestions if s.get("title", "").strip() not in dismissed_titles]
 

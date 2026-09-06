@@ -2,7 +2,7 @@
 export DISPLAY="${DISPLAY:-:0}"
 export XAUTHORITY="${XAUTHORITY:-/run/user/1001/lyxauth}"
 cd /home/v/Projects/jules-vanager
-python3 /home/v/Projects/jules-vanager/jules_tui.py
+python3 /home/v/Projects/jules-vanager/jules_tui.py 2> >(tee -a ~/.config/jules-vanager/tui_debug.log >&2)
 status=$?
 if [ $status -ne 0 ]; then
     echo "jules_tui exited with status $status"

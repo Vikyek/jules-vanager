@@ -95,9 +95,7 @@ def _patched_style_rich_style(self):
         meta=None if _meta is None else self.meta,
     )
 
-_cp = cached_property(_patched_style_rich_style)
-_cp.__set_name__(Style, "rich_style")
-Style.rich_style = _cp
+Style.rich_style = property(_patched_style_rich_style)
 
 def _patched_style_rich_style_with_offset(self, x: int, y: int) -> RichStyle:
     (
@@ -217,10 +215,24 @@ def toggle_systemd_autostart() -> str:
         subprocess.run(["systemctl", "--user", "enable", "jules-listener.service"], capture_output=True, text=True)
         return "Enabled system autostart for listener service."
 
+_LISTENER_ACTIVE_CACHE: bool = False
+_LISTENER_ACTIVE_CACHE_TIME: float = 0.0
+
 def is_listener_service_active() -> bool:
+    global _LISTENER_ACTIVE_CACHE, _LISTENER_ACTIVE_CACHE_TIME
+    now = time.time()
+    if (now - _LISTENER_ACTIVE_CACHE_TIME) < 4.0:
+        return _LISTENER_ACTIVE_CACHE
     try:
-        check = subprocess.run(["systemctl", "--user", "is-active", "jules-listener.service"], capture_output=True, text=True)
-        return check.stdout.strip() == "active"
+        check = subprocess.run(
+            ["systemctl", "--user", "is-active", "jules-listener.service"],
+            capture_output=True,
+            text=True,
+            timeout=1.0
+        )
+        _LISTENER_ACTIVE_CACHE = (check.stdout.strip() == "active")
+        _LISTENER_ACTIVE_CACHE_TIME = now
+        return _LISTENER_ACTIVE_CACHE
     except Exception:
         return False
 
@@ -1308,6 +1320,11 @@ class JulesTUIApp(App):
     def send_reply_worker(self, sid: str, reply_text: str) -> None:
         try:
             res = send_message(sid, reply_text)
+            if isinstance(res, dict) and "error" in res:
+                err_msg = res.get("error", "Unknown error")
+                self.call_from_thread(self.update_status, f"Error sending reply: {err_msg}")
+                self.call_from_thread(self.clear_session_answering, sid)
+                return
             self.call_from_thread(self.update_status, f"Reply sent to {sid}.")
             time.sleep(2)
             self.fetch_data_worker()
@@ -1393,8 +1410,19 @@ def main() -> None:
     except Exception:
         pass
 
-    app = JulesTUIApp()
-    app.run()
+    log_dir = os.path.expanduser("~/.config/jules-vanager")
+    os.makedirs(log_dir, exist_ok=True)
+    crash_log = os.path.join(log_dir, "tui_crash.log")
+
+    try:
+        app = JulesTUIApp()
+        app.run()
+    except Exception:
+        import traceback
+        with open(crash_log, "a") as f:
+            f.write(f"\n--- CRASH AT {time.ctime()} (PID {current_pid}) ---\n")
+            traceback.print_exc(file=f)
+        raise
 
 
 if __name__ == "__main__":

@@ -290,23 +290,41 @@ def check_jules_api_queries():
                     log_action(session_id, "AUTO_REPLY", auto_reply, title=clean_t, repo=rep_name, branch=br_name, action_by="auto", query=query_text[:200])
                     continue
             elif not is_critical and query_text.strip():
-                # Technical question/choice: Invoke AGY worker to generate contextual resolution
-                print(f"🧠 [Jules Listener] Generating AGY response for technical query in session {session_id}...")
+                # Technical question/choice: Spawn a dedicated AGY worker session to resolve the question in parallel
+                print(f"🧠 [Jules Listener] Spawning dedicated AGY subagent worker for hard technical query in session {session_id}...")
                 try:
                     src_ctx = session.get("sourceContext", {})
                     rep_name = src_ctx.get("source", "").replace("sources/github/", "").replace("sources/", "")
                     repo_dir = os.path.join(PROJECTS_DIR, os.path.basename(rep_name)) if rep_name else PROJECTS_DIR
                     
-                    agy_cmd = [
-                        "agy", "-p",
-                        f"Given the task prompt: '{prompt_text[:300]}' and worker query: '{query_text[:400]}', provide a concise, expert resolution instruction in 1-2 short sentences."
-                    ]
-                    res = subprocess.run(agy_cmd, cwd=repo_dir if os.path.exists(repo_dir) else PROJECTS_DIR, capture_output=True, text=True, timeout=45)
+                    agy_prompt = (
+                        f"Target Repository: {rep_name}\n"
+                        f"Original Task Prompt:\n{prompt_text}\n\n"
+                        f"Jules Worker Technical Question/Blocker:\n{query_text}\n\n"
+                        f"Instruction: Analyze the repository codebase at {repo_dir}, investigate the root cause, "
+                        f"make the architectural decision, and output ONLY the exact, concise 1-3 sentence instruction "
+                        f"that Jules should follow to proceed."
+                    )
+                    
+                    # Spawn AGY worker process (isolated CLI subagent call with high reasoning tier)
+                    agy_cmd = ["agy", "-p", agy_prompt]
+                    res = subprocess.run(
+                        agy_cmd,
+                        cwd=repo_dir if os.path.exists(repo_dir) else PROJECTS_DIR,
+                        capture_output=True,
+                        text=True,
+                        timeout=90
+                    )
                     generated_answer = res.stdout.strip()
+                    
+                    # Clean up output markdown if present
+                    if "```" in generated_answer:
+                        generated_answer = generated_answer.split("```")[0].strip()
+                    
                     if res.returncode == 0 and generated_answer:
                         send_res = send_message(session_id, generated_answer)
                         if "error" not in send_res:
-                            print(f"🤖 [Jules Listener] Sent AGY generated reply to session {session_id}: '{generated_answer}'")
+                            print(f"🤖 [Jules Listener] Sent AGY subagent resolution to session {session_id}: '{generated_answer[:120]}...'")
                             from jules_manager import log_action
                             prompt_txt = session.get("prompt", "")
                             clean_t = prompt_txt.splitlines()[0][:80] if prompt_txt else "Session"
@@ -314,7 +332,7 @@ def check_jules_api_queries():
                             log_action(session_id, "AGY_REPLY", generated_answer, title=clean_t, repo=rep_name, branch=br_name, action_by="auto", query=query_text[:200])
                             continue
                 except Exception as e:
-                    print(f"⚠️ [Jules Listener] Failed to generate AGY answer: {e}")
+                    print(f"⚠️ [Jules Listener] AGY subagent resolution failed: {e}")
 
             # Flag critical or unhandled query for explicit user attention
             pending_queries.append({

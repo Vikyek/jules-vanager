@@ -533,11 +533,10 @@ def auto_spawn_suggestions_queue():
             return None
 
         print(f"🚀 [Jules Listener Auto-Queue] Continuous improvement spawn: Starting suggestion '{title[:50]}' for {clean_repo}...")
-        dismiss_suggestion(title)
-        
         spawn_res = start_session_workflow(clean_repo, prompt)
         if isinstance(spawn_res, dict) and ("id" in spawn_res or "name" in spawn_res):
             sid = spawn_res.get("id") or spawn_res.get("name", "").split("/")[-1]
+            dismiss_suggestion(title)
             print(f"✅ [Jules Listener Auto-Queue] Successfully spawned session {sid} for suggestion: '{title[:50]}'")
             return sid
         else:

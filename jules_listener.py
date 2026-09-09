@@ -38,6 +38,29 @@ def load_config_mode():
             pass
     return "continuous"
 
+def _parse_timestamp(ev):
+    """Safely extracts epoch timestamp float from an action log entry (epoch or formatted string)."""
+    if not isinstance(ev, dict):
+        return 0.0
+    ts_epoch = ev.get("timestamp_epoch", 0)
+    if ts_epoch:
+        try:
+            return float(ts_epoch)
+        except Exception:
+            pass
+    ts_str = ev.get("timestamp")
+    if ts_str:
+        try:
+            dt = datetime.datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+            return dt.timestamp()
+        except Exception:
+            try:
+                dt = datetime.datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+                return dt.timestamp()
+            except Exception:
+                pass
+    return 0.0
+
 def auto_archive_completed_sessions():
     """
     Archives sessions ONLY after their tasks are strictly completed, their PRs/commits
@@ -134,13 +157,7 @@ def check_jules_api_queries():
             sess_events = actions_log.get(session_id, [])
             for ev in reversed(sess_events):
                 if ev.get("action") == "UNSTUCK_PROMPT":
-                    last_unstuck_epoch = ev.get("timestamp_epoch", 0)
-                    if not last_unstuck_epoch and ev.get("timestamp"):
-                        try:
-                            dt = datetime.datetime.strptime(ev["timestamp"], "%Y-%m-%d %H:%M:%S")
-                            last_unstuck_epoch = dt.timestamp()
-                        except Exception:
-                            pass
+                    last_unstuck_epoch = _parse_timestamp(ev)
                     if last_unstuck_epoch > 0:
                         break
 
@@ -169,13 +186,7 @@ def check_jules_api_queries():
                 has_agy_dispatched = False
                 for ev in reversed(sess_events):
                     if ev.get("action") == "AGY_DISPATCH":
-                        ev_time = ev.get("timestamp_epoch", 0)
-                        if not ev_time and ev.get("timestamp"):
-                            try:
-                                dt = datetime.datetime.strptime(ev["timestamp"], "%Y-%m-%d %H:%M:%S")
-                                ev_time = dt.timestamp()
-                            except Exception:
-                                pass
+                        ev_time = _parse_timestamp(ev)
                         if ev_time >= last_unstuck_epoch:
                             has_agy_dispatched = True
                             break
@@ -320,6 +331,14 @@ def check_jules_api_queries():
                     generated_answer = res.stdout.strip()
                     
                     # Clean up output markdown if present
+                    if generated_answer.startswith("```"):
+                        lines = generated_answer.split("\n")
+                        if lines[-1].startswith("```"):
+                            lines = lines[1:-1]
+                        else:
+                            lines = lines[1:]
+                        generated_answer = "\n".join(lines).strip()
+
                     if "```" in generated_answer:
                         generated_answer = generated_answer.split("```")[0].strip()
                     
@@ -333,6 +352,11 @@ def check_jules_api_queries():
                             br_name = src_ctx.get("githubRepoContext", {}).get("startingBranch", "main")
                             log_action(session_id, "AGY_REPLY", generated_answer, title=clean_t, repo=rep_name, branch=br_name, action_by="auto", query=query_text[:200])
                             continue
+                    else:
+                        err_msg = res.stderr.strip() if res.stderr else "Empty output"
+                        print(f"⚠️ [Jules Listener] AGY subagent returned non-zero ({res.returncode}) or empty output. Error: {err_msg}")
+                except subprocess.TimeoutExpired as e:
+                    print(f"⚠️ [Jules Listener] AGY subagent resolution timed out after {e.timeout}s.")
                 except Exception as e:
                     print(f"⚠️ [Jules Listener] AGY subagent resolution failed: {e}")
 
@@ -504,13 +528,14 @@ def auto_spawn_suggestions_queue():
     """
     Automated improvement loop:
     Checks if active sessions count is low (< 3).
-    If so, fetches the top available suggestion from queue, starts a new Jules session for it, and dismisses it.
+    If so, fetches top available suggestion from queue, starts a new Jules session for it, and dismisses it upon success.
     """
     res = list_sessions()
     if not isinstance(res, dict) or "error" in res:
         return None
 
-    active_sessions = [s for s in res.get("sessions", []) if s.get("state") not in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED", "CLOSED", "FAILED")]
+    terminal_states = {"COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED", "CLOSED", "FAILED", "CANCELLED", "EXPIRED", "ARCHIVED"}
+    active_sessions = [s for s in res.get("sessions", []) if str(s.get("state", "")).upper() not in terminal_states]
     if len(active_sessions) >= 3:
         return None
 
@@ -521,23 +546,23 @@ def auto_spawn_suggestions_queue():
         if not sugs:
             return None
 
-        # Pick top pending suggestion
-        top_sug = sugs[0]
+        # Pick top pending suggestion with non-empty title/prompt
+        top_sug = next((s for s in sugs if isinstance(s, dict) and s.get("title", "").strip()), None)
+        if not top_sug:
+            return None
+
         title = top_sug.get("title", "").strip()
         repo = top_sug.get("repo", "paru-wrapper")
         prompt = top_sug.get("details") or title
         clean_repo = repo.replace("Vikyek/", "")
 
-        if not title:
-            return None
-
         print(f"🚀 [Jules Listener Auto-Queue] Continuous improvement spawn: Starting suggestion '{title[:50]}' for {clean_repo}...")
-        dismiss_suggestion(title)
         
         spawn_res = start_session_workflow(clean_repo, prompt)
         if isinstance(spawn_res, dict) and ("id" in spawn_res or "name" in spawn_res):
             sid = spawn_res.get("id") or spawn_res.get("name", "").split("/")[-1]
             print(f"✅ [Jules Listener Auto-Queue] Successfully spawned session {sid} for suggestion: '{title[:50]}'")
+            dismiss_suggestion(title)
             return sid
         else:
             print(f"⚠️ [Jules Listener Auto-Queue] Failed to spawn suggestion session: {spawn_res.get('error', 'Unknown')}")

@@ -9,9 +9,82 @@ import datetime
 from unittest.mock import patch, MagicMock
 
 # Function under test helper or imported check
-from jules_listener import check_jules_api_queries
+from jules_listener import check_jules_api_queries, auto_spawn_suggestions_queue
 
-class TestJulesListenerAGYTakeoverDeduplication(unittest.TestCase):
+class TestAutoSpawnSuggestionsQueue(unittest.TestCase):
+
+    @patch("jules_listener.list_sessions")
+    @patch("jules_scraper.fetch_jules_suggestions")
+    @patch("jules_scraper.dismiss_suggestion")
+    @patch("jules_manager.start_session_workflow")
+    def test_auto_spawn_success_dismisses_suggestion(
+        self, mock_start_workflow, mock_dismiss, mock_fetch_sugs, mock_list_sessions
+    ):
+        mock_list_sessions.return_value = {
+            "sessions": [{"name": "sessions/active-1", "state": "IN_PROGRESS"}]
+        }
+        mock_fetch_sugs.return_value = [
+            {"title": "Refactor CLI parser", "repo": "Vikyek/jules-vanager", "details": "Clean up argparse"}
+        ]
+        mock_start_workflow.return_value = {"id": "session-auto-999"}
+
+        sid = auto_spawn_suggestions_queue()
+
+        self.assertEqual(sid, "session-auto-999")
+        mock_start_workflow.assert_called_once_with("jules-vanager", "Clean up argparse")
+        mock_dismiss.assert_called_once_with("Refactor CLI parser")
+
+    @patch("jules_listener.list_sessions")
+    @patch("jules_scraper.fetch_jules_suggestions")
+    @patch("jules_scraper.dismiss_suggestion")
+    @patch("jules_manager.start_session_workflow")
+    def test_auto_spawn_failure_does_not_dismiss_suggestion(
+        self, mock_start_workflow, mock_dismiss, mock_fetch_sugs, mock_list_sessions
+    ):
+        mock_list_sessions.return_value = {
+            "sessions": [{"name": "sessions/active-1", "state": "IN_PROGRESS"}]
+        }
+        mock_fetch_sugs.return_value = [
+            {"title": "Fix memory leak", "repo": "paru-wrapper", "details": "Fix buffer issue"}
+        ]
+        mock_start_workflow.return_value = {"error": "API limit reached"}
+
+        sid = auto_spawn_suggestions_queue()
+
+        self.assertIsNone(sid)
+        mock_start_workflow.assert_called_once_with("paru-wrapper", "Fix buffer issue")
+        mock_dismiss.assert_not_called()
+
+    @patch("jules_listener.list_sessions")
+    @patch("jules_scraper.fetch_jules_suggestions")
+    def test_auto_spawn_skipped_when_active_load_high(self, mock_fetch_sugs, mock_list_sessions):
+        mock_list_sessions.return_value = {
+            "sessions": [
+                {"name": "sessions/s1", "state": "IN_PROGRESS"},
+                {"name": "sessions/s2", "state": "WORKING"},
+                {"name": "sessions/s3", "state": "AWAITING_INPUT"}
+            ]
+        }
+
+        sid = auto_spawn_suggestions_queue()
+
+        self.assertIsNone(sid)
+        mock_fetch_sugs.assert_not_called()
+
+    @patch("jules_listener.list_sessions")
+    @patch("jules_scraper.fetch_jules_suggestions")
+    def test_auto_spawn_returns_none_on_empty_suggestions(self, mock_fetch_sugs, mock_list_sessions):
+        mock_list_sessions.return_value = {"sessions": []}
+        mock_fetch_sugs.return_value = []
+
+        sid = auto_spawn_suggestions_queue()
+
+        self.assertIsNone(sid)
+
+
+if __name__ == "__main__":
+    unittest.main()
+
 
     @patch("jules_listener.list_sessions")
     @patch("jules_listener.get_session_activities")
@@ -103,7 +176,6 @@ class TestJulesListenerAGYTakeoverDeduplication(unittest.TestCase):
 
         ts_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(last_unstuck + 60))
         dt = datetime.datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
-        print(f"DEBUG: last_unstuck={last_unstuck}, ts_str={ts_str}, dt.timestamp()={dt.timestamp()}")
         actions_log_string_ts = {
             "test-session-dedup": [
                 {"action": "UNSTUCK_PROMPT", "timestamp_epoch": last_unstuck},

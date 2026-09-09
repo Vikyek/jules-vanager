@@ -1,3 +1,4 @@
+import datetime
 #!/usr/bin/env python3
 """
 Jules Listener & PR Handler (jules_listener.py)
@@ -9,7 +10,7 @@ import os
 import sys
 import json
 import time
-import datetime
+
 import subprocess
 import glob
 import argparse
@@ -246,7 +247,7 @@ def check_jules_api_queries():
                 if ev.get("action") in ("AUTO_REPLY", "AGY_REPLY", "UNSTUCK_PROMPT"):
                     ev_time = ev.get("timestamp_epoch", 0)
                     if not ev_time and ev.get("timestamp"):
-                        import datetime
+
                         try:
                             dt = datetime.datetime.strptime(ev["timestamp"], "%Y-%m-%d %H:%M:%S")
                             ev_time = dt.timestamp()

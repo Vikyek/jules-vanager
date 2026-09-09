@@ -10,6 +10,7 @@ import os
 import sys
 import json
 import time
+import datetime
 
 import subprocess
 import glob
@@ -37,29 +38,6 @@ def load_config_mode():
         except Exception:
             pass
     return "continuous"
-
-def _parse_timestamp(ev):
-    """Safely extracts epoch timestamp float from an action log entry (epoch or formatted string)."""
-    if not isinstance(ev, dict):
-        return 0.0
-    ts_epoch = ev.get("timestamp_epoch", 0)
-    if ts_epoch:
-        try:
-            return float(ts_epoch)
-        except Exception:
-            pass
-    ts_str = ev.get("timestamp")
-    if ts_str:
-        try:
-            dt = datetime.datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-            return dt.timestamp()
-        except Exception:
-            try:
-                dt = datetime.datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
-                return dt.timestamp()
-            except Exception:
-                pass
-    return 0.0
 
 def auto_archive_completed_sessions():
     """
@@ -157,7 +135,13 @@ def check_jules_api_queries():
             sess_events = actions_log.get(session_id, [])
             for ev in reversed(sess_events):
                 if ev.get("action") == "UNSTUCK_PROMPT":
-                    last_unstuck_epoch = _parse_timestamp(ev)
+                    last_unstuck_epoch = ev.get("timestamp_epoch", 0)
+                    if not last_unstuck_epoch and ev.get("timestamp"):
+                        try:
+                            dt = datetime.datetime.strptime(ev["timestamp"], "%Y-%m-%d %H:%M:%S")
+                            last_unstuck_epoch = dt.timestamp()
+                        except Exception:
+                            pass
                     if last_unstuck_epoch > 0:
                         break
 
@@ -186,7 +170,13 @@ def check_jules_api_queries():
                 has_agy_dispatched = False
                 for ev in reversed(sess_events):
                     if ev.get("action") == "AGY_DISPATCH":
-                        ev_time = _parse_timestamp(ev)
+                        ev_time = ev.get("timestamp_epoch", 0)
+                        if not ev_time and ev.get("timestamp"):
+                            try:
+                                dt = datetime.datetime.strptime(ev["timestamp"], "%Y-%m-%d %H:%M:%S")
+                                ev_time = dt.timestamp()
+                            except Exception:
+                                pass
                         if ev_time >= last_unstuck_epoch:
                             has_agy_dispatched = True
                             break
@@ -331,14 +321,6 @@ def check_jules_api_queries():
                     generated_answer = res.stdout.strip()
                     
                     # Clean up output markdown if present
-                    if generated_answer.startswith("```"):
-                        lines = generated_answer.split("\n")
-                        if lines[-1].startswith("```"):
-                            lines = lines[1:-1]
-                        else:
-                            lines = lines[1:]
-                        generated_answer = "\n".join(lines).strip()
-
                     if "```" in generated_answer:
                         generated_answer = generated_answer.split("```")[0].strip()
                     
@@ -352,11 +334,6 @@ def check_jules_api_queries():
                             br_name = src_ctx.get("githubRepoContext", {}).get("startingBranch", "main")
                             log_action(session_id, "AGY_REPLY", generated_answer, title=clean_t, repo=rep_name, branch=br_name, action_by="auto", query=query_text[:200])
                             continue
-                    else:
-                        err_msg = res.stderr.strip() if res.stderr else "Empty output"
-                        print(f"⚠️ [Jules Listener] AGY subagent returned non-zero ({res.returncode}) or empty output. Error: {err_msg}")
-                except subprocess.TimeoutExpired as e:
-                    print(f"⚠️ [Jules Listener] AGY subagent resolution timed out after {e.timeout}s.")
                 except Exception as e:
                     print(f"⚠️ [Jules Listener] AGY subagent resolution failed: {e}")
 
@@ -370,3 +347,286 @@ def check_jules_api_queries():
             })
             
     return pending_queries
+
+def check_and_handle_jules_prs(repo_path):
+    """
+    Checks open GitHub PRs for Jules-generated branches/PRs in a repository,
+    runs verification tests, and attempts auto-merging clean PRs.
+    """
+    if not os.path.exists(os.path.join(repo_path, ".git")):
+        return []
+
+    try:
+        cmd = ["gh", "pr", "list", "--state", "open", "--json", "number,title,headRefName,mergeable,reviewDecision,commits"]
+        res = subprocess.run(cmd, cwd=repo_path, capture_output=True, text=True)
+        if res.returncode != 0:
+            return []
+        
+        prs = json.loads(res.stdout)
+    except Exception:
+        return []
+
+    jules_handled = []
+    for pr in prs:
+        title = pr.get("title", "")
+        branch = pr.get("headRefName", "")
+        number = pr.get("number")
+        mergeable = pr.get("mergeable", "")
+        
+        # Check if PR originates from Jules
+        is_jules = (
+            "jules" in branch.lower() 
+            or "jules" in title.lower() 
+            or title.startswith(("🛡️", "⚡", "🔌", "🌈", "📜", "📦", "🎨", "🧪"))
+            or any(char.isdigit() for char in branch.split("-")[-1]) and len(branch.split("-")[-1]) >= 15
+        )
+        if is_jules:
+            comments_res = subprocess.run(["gh", "pr", "view", str(number), "--json", "comments,reviews,statusCheckRollup,mergeable"], cwd=repo_path, capture_output=True, text=True)
+            has_review_issues = False
+            review_feedback = ""
+            status_checks_failing = False
+
+            if comments_res.returncode == 0:
+                pr_detail = json.loads(comments_res.stdout)
+                mergeable = pr_detail.get("mergeable", mergeable)
+                
+                for comment in pr_detail.get("comments", []):
+                    body = comment.get("body", "")
+                    # Ignore general Sourcery feedback prompts/footers; only trigger on explicit blocking tags
+                    if "<issue_to_address>" in body or "blocking findings" in body.lower():
+                        has_review_issues = True
+                        review_feedback += f"\n--- Comment ---\n{body}"
+                        
+                for review in pr_detail.get("reviews", []):
+                    body = review.get("body", "")
+                    state = (review.get("state") or "").upper()
+                    if state == "CHANGES_REQUESTED":
+                        has_review_issues = True
+                        review_feedback += f"\n--- Review [{state}] ---\n{body}"
+                    elif state not in ("APPROVED", "DISMISSED") and ("<issue_to_address>" in body or "blocking findings" in body.lower()):
+                        has_review_issues = True
+                        review_feedback += f"\n--- Review [{state}] ---\n{body}"
+                for check in pr_detail.get("statusCheckRollup", []):
+                    st = check.get("status", "")
+                    con = check.get("conclusion", "")
+                    if st == "COMPLETED" and con in ("FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED"):
+                        status_checks_failing = True
+                        review_feedback += f"\n--- Failing Check ---\n{check.get('name', 'CI')}: {con}"
+
+            py_files = glob.glob(os.path.join(repo_path, "*.py")) + glob.glob(os.path.join(repo_path, "scripts/*.py"))
+            syntax_clean = True
+            if py_files:
+                chk = subprocess.run([sys.executable, "-m", "py_compile"] + py_files, capture_output=True)
+                if chk.returncode != 0:
+                    syntax_clean = False
+
+            test_files = glob.glob(os.path.join(repo_path, "test_*.py"))
+            if test_files and syntax_clean:
+                test_chk = subprocess.run([sys.executable, "-m", "unittest"] + [os.path.basename(tf) for tf in test_files], cwd=repo_path, capture_output=True)
+                if test_chk.returncode != 0:
+                    syntax_clean = False
+
+            # Strict Invariant: Do NOT merge or mark completed if failing checks, review issues/sourcery, conflicts, or needs branch updating
+            is_eligible_for_merge = (
+                syntax_clean 
+                and not has_review_issues 
+                and not status_checks_failing 
+                and mergeable in ("MERGEABLE", "CLEAN")
+            )
+
+            # Auto-update PR branch if out-of-date or behind main
+            if mergeable in ("BEHIND", "DIRTY", "UNKNOWN", "OUT_OF_DATE") or not is_eligible_for_merge:
+                try:
+                    # Attempt GitHub CLI auto update-branch first
+                    upd_res = subprocess.run(["gh", "pr", "update-branch", str(number)], cwd=repo_path, capture_output=True, text=True)
+                    if upd_res.returncode == 0:
+                        print(f"🔄 [Jules Listener] Auto-updated branch '{branch}' for PR #{number} via gh CLI.")
+                    else:
+                        # Fallback: rebase locally against origin/main and push
+                        subprocess.run(["git", "fetch", "origin", "main"], cwd=repo_path, capture_output=True)
+                        reb_res = subprocess.run(["git", "rebase", "origin/main", branch], cwd=repo_path, capture_output=True)
+                        if reb_res.returncode == 0:
+                            psh_res = subprocess.run(["git", "push", "--force-with-lease", "origin", branch], cwd=repo_path, capture_output=True)
+                            if psh_res.returncode == 0:
+                                print(f"🔄 [Jules Listener] Auto-rebased and updated branch '{branch}' for PR #{number} locally.")
+                        else:
+                            subprocess.run(["git", "rebase", "--abort"], cwd=repo_path, capture_output=True)
+                except Exception:
+                    pass
+
+            if is_eligible_for_merge:
+                # Attempt gh pr merge
+                merge_cmd = ["gh", "pr", "merge", str(number), "--merge", "--auto"]
+                m_res = subprocess.run(merge_cmd, cwd=repo_path, capture_output=True, text=True)
+                merged = m_res.returncode == 0
+
+                # Fallback: If gh pr merge fails (e.g. rate limit), try local git checkout & merge
+                if not merged and mergeable in ("MERGEABLE", "CLEAN"):
+                    try:
+                        subprocess.run(["git", "fetch", "origin"], cwd=repo_path, capture_output=True)
+                        reb = subprocess.run(["git", "rebase", "origin/main", branch], cwd=repo_path, capture_output=True)
+                        if reb.returncode == 0:
+                            chk_main = subprocess.run(["git", "checkout", "main"], cwd=repo_path, capture_output=True)
+                            mg_res = subprocess.run(["git", "merge", "--ff-only", branch], cwd=repo_path, capture_output=True)
+                            if mg_res.returncode == 0:
+                                psh = subprocess.run(["git", "push", "origin", "main"], cwd=repo_path, capture_output=True)
+                                merged = psh.returncode == 0
+                                if merged:
+                                    # Close remote PR via gh CLI or API
+                                    subprocess.run(["gh", "pr", "close", str(number)], cwd=repo_path, capture_output=True)
+                        else:
+                            subprocess.run(["git", "rebase", "--abort"], cwd=repo_path, capture_output=True)
+                    except Exception:
+                        pass
+
+                if merged:
+                    from jules_manager import log_action, archive_session
+                    r_name = os.path.basename(repo_path)
+                    log_action(f"pr-{number}", "MERGE_PR", f"Merged PR #{number} into {r_name}:{branch}", title=title, repo=r_name, branch=branch, action_by="auto")
+                    # Extract session ID from branch name if present and auto-archive
+                    if "-" in branch:
+                        possible_sid = branch.split("-")[-1]
+                        if possible_sid.isdigit() and len(possible_sid) >= 15:
+                            archive_session(possible_sid, action_by="auto", title=title, repo=r_name, branch=branch)
+            else:
+                merged = False
+                print(f"⚠️ [Jules Listener] PR #{number} ({branch}) is NOT eligible for merge (Checks failing: {status_checks_failing}, Review issues/Sourcery: {has_review_issues}, Mergeable: {mergeable})")
+
+            jules_handled.append({
+                "repo": os.path.basename(repo_path),
+                "pr_number": number,
+                "title": title,
+                "branch": branch,
+                "syntax_clean": syntax_clean,
+                "merged": merged
+            })
+            
+def auto_spawn_suggestions_queue():
+    """
+    Automated improvement loop:
+    Checks if active sessions count is low (< 3).
+    If so, fetches the top available suggestion from queue, starts a new Jules session for it, and dismisses it.
+    """
+    res = list_sessions()
+    if not isinstance(res, dict) or "error" in res:
+        return None
+
+    active_sessions = [s for s in res.get("sessions", []) if s.get("state") not in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED", "CLOSED", "FAILED")]
+    if len(active_sessions) >= 3:
+        return None
+
+    try:
+        from jules_scraper import fetch_jules_suggestions, dismiss_suggestion
+        from jules_manager import start_session_workflow
+        sugs = fetch_jules_suggestions()
+        if not sugs:
+            return None
+
+        # Pick top pending suggestion
+        top_sug = sugs[0]
+        title = top_sug.get("title", "").strip()
+        repo = top_sug.get("repo", "paru-wrapper")
+        prompt = top_sug.get("details") or title
+        clean_repo = repo.replace("Vikyek/", "")
+
+        if not title:
+            return None
+
+        print(f"🚀 [Jules Listener Auto-Queue] Continuous improvement spawn: Starting suggestion '{title[:50]}' for {clean_repo}...")
+        dismiss_suggestion(title)
+        
+        spawn_res = start_session_workflow(clean_repo, prompt)
+        if isinstance(spawn_res, dict) and ("id" in spawn_res or "name" in spawn_res):
+            sid = spawn_res.get("id") or spawn_res.get("name", "").split("/")[-1]
+            print(f"✅ [Jules Listener Auto-Queue] Successfully spawned session {sid} for suggestion: '{title[:50]}'")
+            return sid
+        else:
+            print(f"⚠️ [Jules Listener Auto-Queue] Failed to spawn suggestion session: {spawn_res.get('error', 'Unknown')}")
+    except Exception as e:
+        print(f"❌ [Jules Listener Auto-Queue] Error in auto-spawn: {e}")
+    return None
+
+def run_pass():
+    mode = load_config_mode()
+    if mode == "paused":
+        save_status({
+            "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "mode": "paused",
+            "pending_queries_count": 0,
+            "handled_prs_count": 0,
+            "sessions_count": 0,
+            "queries": [],
+            "prs": []
+        })
+        return
+
+    print("🔄 [Jules Listener] Scanning active API sessions for pending queries...")
+    queries = check_jules_api_queries()
+    if queries:
+        print(f"⚠️ [Jules Listener] Found {len(queries)} session(s) awaiting user input:")
+        for q in queries:
+            print(f"  -> Session {q['session_id']} [{q['state']}]: {q['prompt']}")
+    else:
+        print("✅ [Jules Listener] No API sessions awaiting input.")
+
+    print("\n📦 [Jules Listener] Scanning local repositories for Jules PRs & branches...")
+    repos = [PROJECTS_DIR] if os.path.exists(os.path.join(PROJECTS_DIR, ".git")) else []
+    if os.path.exists(PROJECTS_DIR):
+        for entry in os.listdir(PROJECTS_DIR):
+            full_p = os.path.join(PROJECTS_DIR, entry)
+            if os.path.isdir(full_p) and os.path.exists(os.path.join(full_p, ".git")):
+                repos.append(full_p)
+
+    all_handled = []
+    for r in repos:
+        res = check_and_handle_jules_prs(r)
+        if res:
+            all_handled.extend(res)
+
+    if all_handled:
+        print(f"✅ [Jules Listener] Handled {len(all_handled)} Jules PR(s):")
+        for h in all_handled:
+            status = "MERGED" if h["merged"] else "NEEDS REVIEW / CONFLICTS"
+            print(f"  -> [{h['repo']}] PR #{h['pr_number']} ({h['branch']}): {status}")
+            if h["merged"]:
+                subprocess.run(["git", "branch", "-d", h["branch"]], cwd=os.path.join(PROJECTS_DIR, h["repo"]), capture_output=True)
+                subprocess.run(["git", "push", "origin", "--delete", h["branch"]], cwd=os.path.join(PROJECTS_DIR, h["repo"]), capture_output=True)
+    else:
+        print("✅ [Jules Listener] No open Jules PRs requiring action.")
+
+    archived = auto_archive_completed_sessions()
+
+    # Continuous improvement loop: auto-start suggestions queue if active session load is low (< 3)
+    spawned_sid = auto_spawn_suggestions_queue()
+
+    # Save live status JSON for HUD
+    save_status({
+        "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "mode": mode,
+        "pending_queries_count": len(queries),
+        "handled_prs_count": len(all_handled),
+        "archived_count": archived,
+        "auto_spawned_session": spawned_sid,
+        "queries": [{"session_id": q["session_id"], "state": q["state"], "prompt": q["prompt"][:80]} for q in queries],
+        "prs": all_handled
+    })
+
+def main():
+    parser = argparse.ArgumentParser(description="Jules Active Listener & PR Handler")
+    parser.add_argument("--once", action="store_true", help="Run a single pass and exit")
+    parser.add_argument("--interval", type=int, default=60, help="Polling interval in seconds for continuous mode")
+    args = parser.parse_args()
+
+    if args.once:
+        run_pass()
+    else:
+        print(f"🚀 [Jules Listener] Starting continuous listener daemon (interval: {args.interval}s)...")
+        while True:
+            try:
+                run_pass()
+            except Exception as e:
+                print(f"❌ [Jules Listener] Error during pass: {e}")
+            time.sleep(args.interval)
+
+if __name__ == "__main__":
+    main()

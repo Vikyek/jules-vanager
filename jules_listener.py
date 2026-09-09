@@ -5,6 +5,7 @@ Monitors active Jules REST API sessions for queries, polls open GitHub PRs / bra
 validates syntax & unit tests, auto-merges clean PRs, auto-archives completed sessions, and writes live status for HUD.
 """
 
+import datetime
 import os
 import sys
 import json

@@ -9,6 +9,7 @@ import datetime
 import subprocess
 from unittest.mock import patch, MagicMock
 
+import jules_listener
 from jules_listener import check_jules_api_queries, auto_spawn_suggestions_queue
 
 class TestAutoSpawnSuggestionsQueue(unittest.TestCase):

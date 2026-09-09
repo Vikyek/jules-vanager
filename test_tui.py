@@ -1,3 +1,4 @@
+from unittest.mock import patch, ANY
 #!/usr/bin/env python3
 """
 Headless pilot verification tests for JulesTUIApp (test_tui.py).
@@ -155,7 +156,7 @@ class TestJulesTUIApp(unittest.IsolatedAsyncioTestCase):
 
             await pilot.exit(0)
 
-class TestPanelSuggestionsAndDirectSpawning(unittest.TestCase):
+class TestPanelSuggestionsAndDirectSpawning(unittest.IsolatedAsyncioTestCase):
 
     def test_inspect_reply_on_suggestion_spawns_worker_without_modal(self):
         """Verify action_inspect_reply directly spawns worker and dismisses suggestion without pushing modal screen."""
@@ -185,27 +186,24 @@ class TestPanelSuggestionsAndDirectSpawning(unittest.TestCase):
             # Verify no reply modal screen was pushed
             mock_push_screen.assert_not_called()
 
-    def test_fetch_activities_worker_skips_suggestions_and_agy(self):
+    async def test_fetch_activities_worker_skips_suggestions_and_agy(self):
         """Verify fetch_session_activities_worker returns early for suggestions and AGY stolen sessions."""
         from unittest.mock import patch
 
         app = JulesTUIApp()
-        with patch("jules_tui.get_session_activities") as mock_get_act:
-            app.fetch_session_activities_worker("sug-12345", {"is_suggestion": True}, "N/A")
-            app.fetch_session_activities_worker("agy-67890", {"is_agy_stolen": True}, "N/A")
-            app.fetch_session_activities_worker("pr-111", {"is_unassigned_pr": True}, "N/A")
-            mock_get_act.assert_not_called()
+        async with app.run_test() as pilot:
+            with patch("jules_tui.get_session_activities") as mock_get_act:
+                app.fetch_session_activities_worker("sug-12345", {"is_suggestion": True}, "N/A")
+                app.fetch_session_activities_worker("agy-67890", {"is_agy_stolen": True}, "N/A")
+                app.fetch_session_activities_worker("pr-111", {"is_unassigned_pr": True}, "N/A")
+                mock_get_act.assert_not_called()
 
 
-class TestSessionBadgeRendering(unittest.TestCase):
+class TestSessionBadgeRendering(unittest.IsolatedAsyncioTestCase):
     """Regression tests for session badge icon mappings and rich hex styling (commit 04e121f)."""
 
-    def test_session_badge_icons_and_styling(self):
-        class DummyApp:
-            answering_sessions = set()
-            show_archived = False
-
-        app = DummyApp()
+    async def test_session_badge_icons_and_styling(self):
+        app = JulesTUIApp()
         test_cases = [
             ("SUGGESTION", "[💡 SUGGESTION]", "bold #eab308"),
             ("UNASSIGNED_PR", "[🐙 UNASSIGNED PR]", "bold #c084fc"),
@@ -228,22 +226,32 @@ class TestSessionBadgeRendering(unittest.TestCase):
             ("UNKNOWN_STATE", "[UNKNOWN_STATE]", "#71717a"),
         ]
 
-        from textual.widgets import Static
-        for state, expected_badge, expected_style in test_cases:
-            item = SessionItem({"id": f"sid-{state}", "state": state, "title": f"Test {state}"})
-            item.app = app
-            static = Static("", id="item-static")
-            item._nodes = [static]
-            item.update_rendering()
-            rendered_text = static.renderable
+        async with app.run_test() as pilot:
+            from textual.widgets import Static
+            for state, expected_badge, expected_style in test_cases:
+                item = SessionItem({"id": f"sid-{state}", "state": state, "title": f"Test {state}"})
 
-            # Check rendered Text span styles and content
-            full_plain = rendered_text.plain
-            self.assertTrue(full_plain.startswith(expected_badge), f"Expected {expected_badge} in {full_plain} for state {state}")
+                await app.mount(item)
 
-            # Verify first span style matches badge_style when not focused
-            badge_span_style = str(rendered_text.spans[0].style)
-            self.assertEqual(badge_span_style, expected_style, f"State {state} expected style {expected_style}, got {badge_span_style}")
+                static = item.query_one("#item-static", Static)
+                item.update_rendering()
+                rendered_text = static.render()
+
+                full_plain = rendered_text.plain
+                self.assertTrue(full_plain.startswith(expected_badge), f"Expected {expected_badge} in {full_plain} for state {state}")
+
+                badge_span_style = str(rendered_text.spans[0].style)
+
+                expected_parsed = []
+                for p in expected_style.split():
+                    if p.startswith('#'):
+                        hex_val = p[1:]
+                        expected_parsed.append(f"rgb({int(hex_val[0:2], 16)},{int(hex_val[2:4], 16)},{int(hex_val[4:6], 16)})")
+                    else:
+                        expected_parsed.append(p)
+                actual_sorted = " ".join(sorted(badge_span_style.split()))
+                expected_sorted = " ".join(sorted(expected_parsed))
+                self.assertEqual(actual_sorted, expected_sorted, f"State {state} expected style {expected_style}, got {badge_span_style}")
 
 class TestScraperCommitFiltering(unittest.TestCase):
 
@@ -292,15 +300,18 @@ class TestScraperCommitFiltering(unittest.TestCase):
 
 class TestStuckRecoveryPipeline(unittest.TestCase):
 
-    def test_stage1_unstuck_nudge_trigger(self):
+    @patch('jules_listener.time.time')
+    def test_stage1_unstuck_nudge_trigger(self, mock_time):
         """Test Stage 1 UNSTUCK_PROMPT triggers when inactive for >300s with no previous unstuck attempt."""
-        import time
         import datetime
         from unittest.mock import patch, ANY
         from jules_listener import check_jules_api_queries
 
-        now = time.time()
-        past_iso = datetime.datetime.fromtimestamp(now - 400, datetime.timezone.utc).isoformat()
+        mock_time.return_value = 1788916200.202408
+        now_mock = 1788916200.202408
+        past_iso = "2026-09-09T01:03:20.202408Z"
+
+
         mock_sessions = {
             "sessions": [
                 {
@@ -331,8 +342,10 @@ class TestStuckRecoveryPipeline(unittest.TestCase):
     def test_stage2_agy_takeover_trigger(self):
         """Test Stage 2 AGY_DISPATCH triggers when Stage 1 attempt timed out (>180s) without progress."""
         import time
-        from unittest.mock import patch
+        from unittest.mock import patch, ANY
         from jules_listener import check_jules_api_queries
+
+        sys_now = time.time()
 
         mock_sessions = {
             "sessions": [
@@ -344,15 +357,16 @@ class TestStuckRecoveryPipeline(unittest.TestCase):
                 }
             ]
         }
+        import datetime
+        past_iso = datetime.datetime.fromtimestamp(sys_now - 400, datetime.timezone.utc).isoformat().replace("+00:00", "Z")
         mock_activities = {
             "activities": [
-                {"createTime": "2026-09-06T14:00:00Z", "agentMessaged": {"agentMessage": "Old progress"}}
+                {"createTime": past_iso, "agentMessaged": {"agentMessage": "Old progress"}}
             ]
         }
-        # Simulate previous UNSTUCK_PROMPT logged in actions_log at epoch 1000 (well over 180s ago)
         mock_actions_log = {
             "sess-stuck-2": [
-                {"action": "UNSTUCK_PROMPT", "timestamp_epoch": 1000.0}
+                {"action": "UNSTUCK_PROMPT", "timestamp_epoch": sys_now - 200}
             ]
         }
 
@@ -361,15 +375,20 @@ class TestStuckRecoveryPipeline(unittest.TestCase):
              patch("jules_listener.send_message") as mock_send, \
              patch("json.load", return_value=mock_actions_log), \
              patch("os.path.exists", return_value=True), \
+             patch("builtins.open", unittest.mock.mock_open(read_data='{}')), \
              patch("subprocess.run") as mock_subproc, \
              patch("jules_manager.archive_session") as mock_archive, \
-             patch("jules_manager.log_action") as mock_log:
+             patch("jules_manager.log_action") as mock_log, \
+             patch("jules_listener.time.time", return_value=sys_now):
 
             check_jules_api_queries()
             mock_send.assert_not_called()
             mock_log.assert_called_once()
             self.assertEqual(mock_log.call_args[0][1], "AGY_DISPATCH")
             mock_archive.assert_called_once_with("sess-stuck-2", action_by="auto", title="Test stuck task stage 2", repo="owner/repo", branch="main")
+
+
+
 
 
 class TestSuggestionAutoDismissal(unittest.TestCase):
@@ -435,3 +454,41 @@ if __name__ == "__main__":
     unittest.main()
 
 
+
+
+class TestTuiPerformanceTimers(unittest.IsolatedAsyncioTestCase):
+    async def test_high_frequency_rendering_tick_and_auto_refresh(self):
+        """Regression test for commit 3cc7415 (100ms item render tick and 5s auto-refresh)."""
+        app = JulesTUIApp()
+
+        async with app.run_test() as pilot:
+            from unittest.mock import patch
+            from textual.widgets import ListView
+            list_view = app.query_one("#session-list", ListView)
+
+            s_running = SessionItem({"id": "sid-running", "state": "IN_PROGRESS", "title": "Test Running"})
+            s_completed = SessionItem({"id": "sid-completed", "state": "COMPLETED", "title": "Test Completed"})
+
+            await list_view.mount(s_running)
+            await list_view.mount(s_completed)
+            await pilot.pause()
+
+            app.answering_sessions = {"sid-running": 1}
+
+            with patch.object(s_running, "update_rendering") as mock_running_update, \
+                 patch.object(s_completed, "update_rendering") as mock_completed_update:
+
+                app.animate_status_bar()
+
+                mock_running_update.assert_called_once()
+                mock_completed_update.assert_not_called()
+
+            import time
+            app.answering_sessions = {"sid-expired": time.time() - 200, "sid-fresh": time.time() - 10}
+            app.animate_status_bar()
+            self.assertNotIn("sid-expired", app.answering_sessions)
+            self.assertIn("sid-fresh", app.answering_sessions)
+
+            with patch.object(app, "fetch_data_worker") as mock_fetch_worker:
+                app.auto_refresh_sessions()
+                mock_fetch_worker.assert_called_once()

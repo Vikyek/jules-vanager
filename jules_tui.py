@@ -1053,9 +1053,8 @@ class JulesTUIApp(App):
             else:
                 panel_str = f"📋 ACTIVE SESSIONS ({self.filter_mode}) {spinner}"
 
-            bar.update(f" {panel_str}  │  {listener_str}  │  {self.status_msg}")
+            bar.update(f" {panel_str} | {listener_str} | {self.status_msg}")
 
-            # High-frequency dynamic timer tick for active session items every 100ms
             list_view = self.query_one("#session-list", ListView)
             for item in list_view.children:
                 if isinstance(item, SessionItem):
@@ -1064,6 +1063,7 @@ class JulesTUIApp(App):
                         item.update_rendering()
 
             if getattr(self, "answering_sessions", None):
+
                 now = time.time()
                 expired = [sid for sid, ts in self.answering_sessions.items() if (now - ts) > 180]
                 for sid in expired:

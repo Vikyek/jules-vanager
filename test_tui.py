@@ -1,4 +1,3 @@
-from unittest.mock import patch, ANY
 #!/usr/bin/env python3
 """
 Headless pilot verification tests for JulesTUIApp (test_tui.py).
@@ -6,6 +5,7 @@ Tests keybindings, list navigation, filter cycling, and modal screen rendering n
 """
 
 import unittest
+from unittest.mock import patch, ANY
 import asyncio
 from jules_tui import JulesTUIApp, ReplyModalScreen, SessionItem
 from textual.widgets import TextArea

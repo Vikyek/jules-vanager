@@ -237,6 +237,7 @@ def is_listener_service_active() -> bool:
         _LISTENER_ACTIVE_CACHE_TIME = now
         return _LISTENER_ACTIVE_CACHE
     except Exception:
+        _LISTENER_ACTIVE_CACHE_TIME = now
         return False
 
 _SESSION_ACTIVITIES_CACHE: Dict[str, Dict[str, Any]] = {}

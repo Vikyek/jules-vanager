@@ -39,6 +39,30 @@ def load_config_mode():
             pass
     return "continuous"
 
+def _parse_timestamp(ev: dict) -> float:
+    """Parses timestamp from action log event (epoch numeric/str or ISO/legacy date string)."""
+    if not isinstance(ev, dict):
+        return 0.0
+    ts_epoch = ev.get("timestamp_epoch", 0)
+    if ts_epoch:
+        try:
+            return float(ts_epoch)
+        except (ValueError, TypeError):
+            pass
+    ts_str = ev.get("timestamp")
+    if ts_str:
+        try:
+            dt = datetime.datetime.fromisoformat(str(ts_str).replace("Z", "+00:00"))
+            return dt.timestamp()
+        except Exception:
+            pass
+        try:
+            dt = datetime.datetime.strptime(str(ts_str), "%Y-%m-%d %H:%M:%S")
+            return dt.timestamp()
+        except Exception:
+            pass
+    return 0.0
+
 def auto_archive_completed_sessions():
     """
     Archives sessions ONLY after their tasks are strictly completed, their PRs/commits
@@ -135,13 +159,7 @@ def check_jules_api_queries():
             sess_events = actions_log.get(session_id, [])
             for ev in reversed(sess_events):
                 if ev.get("action") == "UNSTUCK_PROMPT":
-                    last_unstuck_epoch = ev.get("timestamp_epoch", 0)
-                    if not last_unstuck_epoch and ev.get("timestamp"):
-                        try:
-                            dt = datetime.datetime.strptime(ev["timestamp"], "%Y-%m-%d %H:%M:%S")
-                            last_unstuck_epoch = dt.timestamp()
-                        except Exception:
-                            pass
+                    last_unstuck_epoch = _parse_timestamp(ev)
                     if last_unstuck_epoch > 0:
                         break
 
@@ -170,13 +188,7 @@ def check_jules_api_queries():
                 has_agy_dispatched = False
                 for ev in reversed(sess_events):
                     if ev.get("action") == "AGY_DISPATCH":
-                        ev_time = ev.get("timestamp_epoch", 0)
-                        if not ev_time and ev.get("timestamp"):
-                            try:
-                                dt = datetime.datetime.strptime(ev["timestamp"], "%Y-%m-%d %H:%M:%S")
-                                ev_time = dt.timestamp()
-                            except Exception:
-                                pass
+                        ev_time = _parse_timestamp(ev)
                         if ev_time >= last_unstuck_epoch:
                             has_agy_dispatched = True
                             break
@@ -246,14 +258,7 @@ def check_jules_api_queries():
             now_epoch = time.time()
             for ev in reversed(sess_events):
                 if ev.get("action") in ("AUTO_REPLY", "AGY_REPLY", "UNSTUCK_PROMPT"):
-                    ev_time = ev.get("timestamp_epoch", 0)
-                    if not ev_time and ev.get("timestamp"):
-
-                        try:
-                            dt = datetime.datetime.strptime(ev["timestamp"], "%Y-%m-%d %H:%M:%S")
-                            ev_time = dt.timestamp()
-                        except Exception:
-                            pass
+                    ev_time = _parse_timestamp(ev)
                     if ev_time > 0 and (now_epoch - ev_time < 90):
                         recent_auto_reply = True
                         break
@@ -511,7 +516,8 @@ def auto_spawn_suggestions_queue():
     if not isinstance(res, dict) or "error" in res:
         return None
 
-    active_sessions = [s for s in res.get("sessions", []) if s.get("state") not in ("COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED", "CLOSED", "FAILED")]
+    terminal_states = {"COMPLETED", "SUCCEEDED", "RESOLVED", "MERGED", "CLOSED", "FAILED", "CANCELLED", "EXPIRED", "ARCHIVED"}
+    active_sessions = [s for s in res.get("sessions", []) if str(s.get("state", "")).upper() not in terminal_states]
     if len(active_sessions) >= 3:
         return None
 
@@ -523,14 +529,18 @@ def auto_spawn_suggestions_queue():
             return None
 
         # Pick top pending suggestion
-        top_sug = sugs[0]
+        top_sug = None
+        for item in sugs:
+            if isinstance(item, dict) and item.get("title", "").strip():
+                top_sug = item
+                break
+        if not top_sug:
+            return None
+
         title = top_sug.get("title", "").strip()
         repo = top_sug.get("repo", "paru-wrapper")
         prompt = top_sug.get("details") or title
         clean_repo = repo.replace("Vikyek/", "")
-
-        if not title:
-            return None
 
         print(f"🚀 [Jules Listener Auto-Queue] Continuous improvement spawn: Starting suggestion '{title[:50]}' for {clean_repo}...")
         spawn_res = start_session_workflow(clean_repo, prompt)

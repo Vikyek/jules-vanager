@@ -237,6 +237,7 @@ def is_listener_service_active() -> bool:
         _LISTENER_ACTIVE_CACHE_TIME = now
         return _LISTENER_ACTIVE_CACHE
     except Exception:
+        _LISTENER_ACTIVE_CACHE = False
         _LISTENER_ACTIVE_CACHE_TIME = now
         return False
 
@@ -264,7 +265,21 @@ def parse_session_activities(activities: List[Dict[str, Any]]) -> Dict[str, Any]
 _SESSION_PR_STATUS_CACHE = {}
 _SESSION_PR_STATUS_CACHE_TIME = {}
 
-def check_session_pr_status(session: Dict[str, Any]) -> Dict[str, Any]:
+def get_cached_pr_status(session: Dict[str, Any]) -> Tuple[Dict[str, Any], bool]:
+    default_res = {
+        "has_pr": False, "pr_number": None, "status_checks_failing": False,
+        "has_review_issues": False, "mergeable": "UNKNOWN", "needs_update": False, "url": ""
+    }
+    if not session:
+        return default_res, True
+    sid = session.get("id") or session.get("name", "").split("/")[-1]
+    
+    now = time.time()
+    if sid in _SESSION_PR_STATUS_CACHE and (now - _SESSION_PR_STATUS_CACHE_TIME.get(sid, 0)) < 45:
+        return _SESSION_PR_STATUS_CACHE[sid], True
+    return _SESSION_PR_STATUS_CACHE.get(sid, default_res), False
+
+def fetch_session_pr_status(session: Dict[str, Any]) -> Dict[str, Any]:
     default_res = {
         "has_pr": False, "pr_number": None, "status_checks_failing": False,
         "has_review_issues": False, "mergeable": "UNKNOWN", "needs_update": False, "url": ""
@@ -323,6 +338,9 @@ def check_session_pr_status(session: Dict[str, Any]) -> Dict[str, Any]:
     _SESSION_PR_STATUS_CACHE[sid] = default_res
     _SESSION_PR_STATUS_CACHE_TIME[sid] = now
     return default_res
+
+def check_session_pr_status(session: Dict[str, Any]) -> Dict[str, Any]:
+    return fetch_session_pr_status(session)
 
 def get_unassigned_jules_prs(active_sessions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     active_sids = {s.get("id") or s.get("name", "").split("/")[-1] for s in active_sessions}
@@ -1312,15 +1330,30 @@ class JulesTUIApp(App):
         if act_count is not None:
             body_md += f"\n- **Total Activities:** {act_count}\n"
 
-        pr_st = check_session_pr_status(s)
+        pr_st, is_cached = get_cached_pr_status(s)
         if pr_st.get("has_pr"):
             body_md += f"\n### 🐙 GitHub PR #{pr_st.get('pr_number')}\n- **URL:** {pr_st.get('url')}\n- **Mergeable:** {pr_st.get('mergeable')}\n"
         elif s.get("url") and s.get("pr_number"):
             body_md += f"\n### 🐙 GitHub PR #{s.get('pr_number')}\n- **URL:** {s.get('url')}\n"
+        elif not is_cached:
+            body_md += f"\n### 🐙 GitHub PR\n- **Status:** Fetching...\n"
 
         try:
             content = self.query_one("#detail-content", Markdown)
             content.update(body_md)
+        except Exception:
+            pass
+
+        if not is_cached:
+            self.fetch_session_pr_status_worker(sid, s, archive_time)
+
+    @work(thread=True)
+    def fetch_session_pr_status_worker(self, sid: str, s: Dict[str, Any], archive_time: str) -> None:
+        try:
+            fetch_session_pr_status(s)
+            list_view = self.query_one("#session-list", ListView)
+            if list_view.highlighted_child and getattr(list_view.highlighted_child, "sid", None) == sid:
+                self.call_from_thread(self.render_session_details, sid, s, archive_time)
         except Exception:
             pass
 
@@ -1709,16 +1742,34 @@ class JulesTUIApp(App):
         list_view = self.query_one("#session-list", ListView)
         if isinstance(list_view.highlighted_child, SessionItem):
             s = list_view.highlighted_child.session
+            sid = list_view.highlighted_child.sid
             # Unassigned PRs already carry url directly
             url = s.get("url", "")
             if not url:
-                pr_st = check_session_pr_status(s)
+                pr_st, is_cached = get_cached_pr_status(s)
                 url = pr_st.get("url", "")
+                if not is_cached and not url:
+                    self.update_status("Fetching PR info...")
+                    self.open_pr_worker(sid, s)
+                    return
             if url:
                 webbrowser.open(url)
                 self.update_status(f"Opened PR: {url}")
             else:
                 self.update_status("No PR found for selected session.")
+
+    @work(thread=True)
+    def open_pr_worker(self, sid: str, s: Dict[str, Any]) -> None:
+        try:
+            pr_st = fetch_session_pr_status(s)
+            url = pr_st.get("url", "")
+            if url:
+                webbrowser.open(url)
+                self.call_from_thread(self.update_status, f"Opened PR: {url}")
+            else:
+                self.call_from_thread(self.update_status, "No PR found for selected session.")
+        except Exception as e:
+            self.call_from_thread(self.update_status, f"Error fetching PR status: {e}")
 
 
 def main() -> None:

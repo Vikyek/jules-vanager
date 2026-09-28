@@ -1068,7 +1068,6 @@ class JulesTUIApp(App):
                         item.update_rendering()
 
             if getattr(self, "answering_sessions", None):
-
                 now = time.time()
                 expired = [sid for sid, ts in self.answering_sessions.items() if (now - ts) > 180]
                 for sid in expired:

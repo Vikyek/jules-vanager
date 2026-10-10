@@ -448,9 +448,9 @@ def check_and_handle_jules_prs(repo_path):
                     else:
                         # Fallback: rebase locally against origin/main and push
                         subprocess.run(["git", "fetch", "origin", "main"], cwd=repo_path, capture_output=True)
-                        reb_res = subprocess.run(["git", "rebase", "origin/main", branch], cwd=repo_path, capture_output=True)
+                        reb_res = subprocess.run(["git", "rebase", "origin/main", "--", branch], cwd=repo_path, capture_output=True)
                         if reb_res.returncode == 0:
-                            psh_res = subprocess.run(["git", "push", "--force-with-lease", "origin", branch], cwd=repo_path, capture_output=True)
+                            psh_res = subprocess.run(["git", "push", "--force-with-lease", "origin", "--", branch], cwd=repo_path, capture_output=True)
                             if psh_res.returncode == 0:
                                 print(f"🔄 [Jules Listener] Auto-rebased and updated branch '{branch}' for PR #{number} locally.")
                         else:
@@ -468,10 +468,10 @@ def check_and_handle_jules_prs(repo_path):
                 if not merged and mergeable in ("MERGEABLE", "CLEAN"):
                     try:
                         subprocess.run(["git", "fetch", "origin"], cwd=repo_path, capture_output=True)
-                        reb = subprocess.run(["git", "rebase", "origin/main", branch], cwd=repo_path, capture_output=True)
+                        reb = subprocess.run(["git", "rebase", "origin/main", "--", branch], cwd=repo_path, capture_output=True)
                         if reb.returncode == 0:
                             chk_main = subprocess.run(["git", "checkout", "main"], cwd=repo_path, capture_output=True)
-                            mg_res = subprocess.run(["git", "merge", "--ff-only", branch], cwd=repo_path, capture_output=True)
+                            mg_res = subprocess.run(["git", "merge", "--ff-only", "--", branch], cwd=repo_path, capture_output=True)
                             if mg_res.returncode == 0:
                                 psh = subprocess.run(["git", "push", "origin", "main"], cwd=repo_path, capture_output=True)
                                 merged = psh.returncode == 0
@@ -597,8 +597,8 @@ def run_pass():
             status = "MERGED" if h["merged"] else "NEEDS REVIEW / CONFLICTS"
             print(f"  -> [{h['repo']}] PR #{h['pr_number']} ({h['branch']}): {status}")
             if h["merged"]:
-                subprocess.run(["git", "branch", "-d", h["branch"]], cwd=os.path.join(PROJECTS_DIR, h["repo"]), capture_output=True)
-                subprocess.run(["git", "push", "origin", "--delete", h["branch"]], cwd=os.path.join(PROJECTS_DIR, h["repo"]), capture_output=True)
+                subprocess.run(["git", "branch", "-d", "--", h["branch"]], cwd=os.path.join(PROJECTS_DIR, h["repo"]), capture_output=True)
+                subprocess.run(["git", "push", "origin", "--delete", "--", h["branch"]], cwd=os.path.join(PROJECTS_DIR, h["repo"]), capture_output=True)
     else:
         print("✅ [Jules Listener] No open Jules PRs requiring action.")
 

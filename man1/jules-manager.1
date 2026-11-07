@@ -1,0 +1,37 @@
+.TH JULES-MANAGER 1 "March 2026" "jules-vanager 1.0.0" "User Commands"
+.SH NAME
+jules-manager \- Google Jules API session and repository manager
+.SH SYNOPSIS
+.B jules-manager
+[\fIOPTIONS\fR] \fICOMMAND\fR [\fIARGS\fR]
+.SH DESCRIPTION
+.B jules-manager
+provides command-line control over Google Jules asynchronous coding tasks, connected repositories, session logs, and messaging.
+.SH COMMANDS
+.TP
+.B list-sources
+List connected repositories and sources.
+.TP
+.B list-sessions
+List active or completed Jules sessions.
+.TP
+.B start-session \fR(or \fBstart\fR)
+Start a new Jules task session in a target repository with a provided prompt.
+.TP
+.B get-activities
+Retrieve real-time event logs, activity entries, and tool calls for a session.
+.TP
+.B send-message
+Send an answer or message to an active Jules session prompt.
+.TP
+.B archive-session
+Archive an existing session.
+.SH OPTIONS
+.TP
+.BR \-h ", " \-\-help
+Show summary of options and exit.
+.SH SEE ALSO
+.BR jules-listener (1),
+.BR jules-tui (1)
+.SH AUTHOR
+Maintained by Vikyek <https://github.com/Vikyek>.

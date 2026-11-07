@@ -43,4 +43,14 @@ EOF
     install -Dm644 jules-listener.service "$pkgdir/usr/lib/systemd/user/jules-listener.service"
     install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+
+    # Install manpages
+    if [ -d "man1" ]; then
+        install -d "$pkgdir/usr/share/man/man1"
+        for manfile in man1/*.1; do
+            [ -f "$manfile" ] && install -Dm644 "$manfile" "$pkgdir/usr/share/man/man1/"
+        done
+        ln -sf jules-manager.1.gz "$pkgdir/usr/share/man/man1/jules-vanager.1.gz" 2>/dev/null || \
+        ln -sf jules-manager.1 "$pkgdir/usr/share/man/man1/jules-vanager.1"
+    fi
 }

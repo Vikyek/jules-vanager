@@ -1,0 +1,20 @@
+.TH JULES-LISTENER 1 "March 2026" "jules-vanager 1.0.0" "User Commands"
+.SH NAME
+jules-listener \- Background watcher and notifier daemon for Google Jules
+.SH SYNOPSIS
+.B jules-listener
+[\fIOPTIONS\fR]
+.SH DESCRIPTION
+.B jules-listener
+polls active Google Jules sessions for required user input, pending pull requests, and session completions, dispatching desktop notifications.
+.SH OPTIONS
+.TP
+.BR \-\-once
+Run a single polling cycle and exit immediately.
+.TP
+.BR \-h ", " \-\-help
+Show summary of options and exit.
+.SH SEE ALSO
+.BR jules-manager (1)
+.SH AUTHOR
+Maintained by Vikyek <https://github.com/Vikyek>.

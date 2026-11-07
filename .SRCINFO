@@ -1,7 +1,7 @@
 pkgbase = jules-vanager
 	pkgdesc = Google Jules API Manager, Listener Daemon, Interactive TUI, and Conky HUD
 	pkgver = 1.0.0
-	pkgrel = 2
+	pkgrel = 3
 	url = https://github.com/Vikyek/jules-vanager
 	arch = any
 	license = GPL-3.0-only

@@ -1,7 +1,7 @@
 # Maintainer: Vikyek <https://github.com/Vikyek>
 pkgname=jules-vanager
 pkgver=1.0.0
-pkgrel=2
+pkgrel=3
 pkgdesc="Google Jules API Manager, Listener Daemon, Interactive TUI, and Conky HUD"
 arch=('any')
 url="https://github.com/Vikyek/jules-vanager"

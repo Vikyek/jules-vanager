@@ -1,7 +1,7 @@
 # Maintainer: Vikyek <https://github.com/Vikyek>
 pkgname=jules-vanager
 pkgver=1.0.0
-pkgrel=3
+pkgrel=4
 pkgdesc="Google Jules API Manager, Listener Daemon, Interactive TUI, and Conky HUD"
 arch=('any')
 url="https://github.com/Vikyek/jules-vanager"
@@ -45,9 +45,9 @@ EOF
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 
     # Install manpages
-    if [ -d "man1" ]; then
+    if [ -d "$startdir/man1" ]; then
         install -d "$pkgdir/usr/share/man/man1"
-        for manfile in man1/*.1; do
+        for manfile in "$startdir"/man1/*.1; do
             [ -f "$manfile" ] && install -Dm644 "$manfile" "$pkgdir/usr/share/man/man1/"
         done
         ln -sf jules-manager.1.gz "$pkgdir/usr/share/man/man1/jules-vanager.1.gz" 2>/dev/null || \

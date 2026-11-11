@@ -4,3 +4,5 @@ __pycache__/
 *.pyo
 status.json
 config.json
+
+.projectmem/

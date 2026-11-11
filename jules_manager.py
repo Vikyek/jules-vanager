@@ -44,6 +44,8 @@ def _make_request(endpoint, method="GET", payload=None):
     api_key = load_credentials()
     if not api_key:
         return {"error": "JULES" + "_API_KEY not configured in environment or ~/.gemini/config/.vault_credentials.env"}
+    if api_key.startswith("ctx7sk"):
+        return {"error": "Invalid JULES_API_KEY: detected Context7 key (starts with 'ctx7sk'). Jules API requires an official Google Jules token (starts with 'AQ.') or OAuth2 access token."}
     
     url = f"{BASE_URL}/{endpoint.lstrip('/')}"
     headers = {

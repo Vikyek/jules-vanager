@@ -139,6 +139,13 @@ Run the included idempotent installer script:
 ./install.sh
 ```
 
+### Agensi & Agent Skill Ingestion (`SKILL.md`)
+
+`jules-vanager` is packaged as a standard, turnkey agent skill conforming to the open `SKILL.md` specification and compatible with the Agensi marketplace:
+- Root [`SKILL.md`](SKILL.md) enables direct single-skill ingestion in Agensi, Antigravity, Claude Code, and Codex CLI.
+- Standard skill definition located at [`skills/jules-vanager/SKILL.md`](skills/jules-vanager/SKILL.md).
+- Allows connected agents to programmatically offload tasks to Google Jules, monitor progress, answer user feedback prompts, and automate PR merges.
+
 ### Headless Verification Tests
 
 Run non-interactive pilot unit tests for the TUI:

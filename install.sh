@@ -40,10 +40,11 @@ cp "$SCRIPT_DIR/jules-listener.service" "$SYSTEMD_USER_DIR/jules-listener.servic
 systemctl --user daemon-reload || true
 
 if [[ "$INSTALL_AGY" == "true" ]]; then
-    echo "🔌 [jules-manager] Registering optional AGY Plugin..."
-    mkdir -p "$PLUGIN_DIR/skills/jules" "$PLUGIN_DIR/rules"
+    echo "🔌 [jules-manager] Registering AGY Plugin and Skill..."
+    mkdir -p "$PLUGIN_DIR/skills/jules" "$PLUGIN_DIR/rules" "$HOME/.gemini/config/skills/jules-vanager"
     echo '{"name": "jules-manager"}' > "$PLUGIN_DIR/plugin.json"
-    cp "$SCRIPT_DIR/skills/jules/SKILL.md" "$PLUGIN_DIR/skills/jules/SKILL.md" 2>/dev/null || true
+    cp -d "$SCRIPT_DIR/skills/jules-vanager/SKILL.md" "$PLUGIN_DIR/skills/jules/SKILL.md" 2>/dev/null || true
+    ln -sf "$SCRIPT_DIR/skills/jules-vanager/SKILL.md" "$HOME/.gemini/config/skills/jules-vanager/SKILL.md"
 fi
 
 echo "✅ [jules-manager] Installation completed successfully!"
